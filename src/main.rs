@@ -1,6 +1,7 @@
 extern crate actix_web;
 
 mod app_state;
+mod availability;
 mod ping;
 mod server;
 
@@ -17,13 +18,12 @@ async fn main() {
         }
         .start(),
     );
-
-    let server_fut = server::start_server();
-    let ping_fut_1 = ping::start(app_state.clone());
+    // let server_fut = server::start_server();
+    // let ping_fut_1 = ping::start(app_state.clone());
     let ping_fut_2 = ping::start(app_state.clone());
 
     println!("Services started");
 
-    let _ = tokio::try_join!(server_fut, ping_fut_1, ping_fut_2);
+    let _ = tokio::try_join!(/*server_fut, ping_fut_1,*/ ping_fut_2);
     actix::System::current().stop();
 }
