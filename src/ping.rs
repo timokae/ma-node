@@ -10,13 +10,13 @@ pub async fn start(app_state: Arc<Addr<AppState>>) -> std::io::Result<()> {
         loop {
             let _ = app_state.send(Ping(1)).await;
             let _ = availability_stat.send(Trigger()).await;
-            std::thread::sleep(Duration::from_secs(2));
+            std::thread::sleep(Duration::from_secs(5));
         }
     })
     .await
     .unwrap();
 
-    println!("Ping Res: {:?}", res);
+    // println!("Ping Res: {:?}", res);
 
     Ok(())
 }

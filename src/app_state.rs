@@ -12,7 +12,6 @@ impl Handler<Ping> for AppState {
 
     fn handle(&mut self, msg: Ping, _: &mut Context<Self>) -> Self::Result {
         self.count += msg.0;
-        println!("Ping: {}", self.count);
         self.count
     }
 }
