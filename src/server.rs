@@ -1,13 +1,27 @@
+use crate::app_state::{AppState, FilesChanged};
+use actix::prelude::*;
 use actix_multipart::Multipart;
 use actix_web::{web, App, Error, HttpResponse, HttpServer};
 use futures::{StreamExt, TryStreamExt};
+use serde::{Deserialize, Serialize};
 use std::io::Write;
+use std::path::Path;
+use std::sync::Arc;
 
-pub async fn start_server() -> std::io::Result<()> {
-    HttpServer::new(|| {
+#[derive(Serialize)]
+struct JsonResponse {
+    status: String,
+}
+
+#[allow(dead_code)]
+pub async fn start_server(app_state: Arc<Addr<AppState>>) -> std::io::Result<()> {
+    let app_data = web::Data::new(app_state);
+    HttpServer::new(move || {
         App::new()
+            .app_data(app_data.clone())
             .route("/", web::get().to(index))
             .route("/upload", web::post().to(save_file))
+            .route("/{download:.*}", web::get().to(download))
     })
     .bind("0.0.0.0:8080")?
     .shutdown_timeout(2)
@@ -32,11 +46,30 @@ async fn index() -> HttpResponse {
     HttpResponse::Ok().body(html)
 }
 
-async fn save_file(mut payload: Multipart) -> Result<HttpResponse, Error> {
+#[derive(Deserialize)]
+struct DownloadRequest {
+    hash: String,
+}
+async fn download(
+    web::Query(info): web::Query<DownloadRequest>,
+) -> Result<actix_files::NamedFile, Error> {
+    let path_str = format!("files/{}", info.hash);
+    let path = Path::new(path_str.as_str());
+    if path.exists() {
+        return Ok(actix_files::NamedFile::open(path)?);
+    } else {
+        Err(actix_web::error::ErrorNotFound("File not found").into())
+    }
+}
+
+async fn save_file(
+    app_state: web::Data<Arc<Addr<AppState>>>,
+    mut payload: Multipart,
+) -> Result<HttpResponse, Error> {
     while let Ok(Some(mut field)) = payload.try_next().await {
         let content_type = field.content_disposition().unwrap();
         let filename = content_type.get_filename().unwrap();
-        let filepath = format!("./tmp/{}", &filename);
+        let filepath = format!("./files/{}", &filename);
 
         let mut f = web::block(|| std::fs::File::create(filepath))
             .await
@@ -48,5 +81,11 @@ async fn save_file(mut payload: Multipart) -> Result<HttpResponse, Error> {
         }
     }
 
-    Ok(HttpResponse::Ok().into())
+    let response = JsonResponse {
+        status: String::from("ok"),
+    };
+
+    let _ = app_state.send(FilesChanged()).await;
+
+    Ok(HttpResponse::Ok().json(response))
 }
