@@ -15,7 +15,7 @@ pub struct AvailabilityActor {
     conn: Connection,
     interval: i64,
 }
-
+#[allow(dead_code)]
 impl AvailabilityActor {
     pub fn new() -> AvailabilityActor {
         let conn = Connection::open("client.db").unwrap();

@@ -11,6 +11,7 @@ use std::sync::Arc;
 #[derive(Serialize)]
 struct JsonResponse {
     status: String,
+    message: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -83,6 +84,7 @@ async fn save_file(
 
     let response = JsonResponse {
         status: String::from("ok"),
+        message: Some(String::from("KEKW")),
     };
 
     let _ = app_state.send(FilesChanged()).await;

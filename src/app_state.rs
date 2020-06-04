@@ -1,28 +1,34 @@
 use actix::prelude::*;
+use rand::Rng;
+use serde::Serialize;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
-struct Ping {
-    port: u16,
-    weight: f32,
-    files: Vec<String>,
+#[derive(Serialize)]
+pub struct Ping {
+    pub fingerprint: String,
+    pub port: u16,
+    pub weight: f32,
+    pub files: Vec<String>,
 }
 // PING
 pub struct SendPing();
 
 impl Message for SendPing {
-    type Result = usize;
+    type Result = Ping;
 }
 
 impl Handler<SendPing> for AppState {
-    type Result = usize;
+    type Result = MessageResult<SendPing>;
 
     fn handle(&mut self, _msg: SendPing, _: &mut Context<Self>) -> Self::Result {
         let ping = Ping {
+            fingerprint: self.fingerprint.clone(),
             port: self.port,
             weight: self.calculate_weight(),
             files: self.files.clone(),
         };
-        self.send_ping_to_monitor(ping);
-        0
+        MessageResult(ping)
     }
 }
 
@@ -41,6 +47,7 @@ impl Handler<FilesChanged> for AppState {
 
 // MYACTOR
 pub struct AppState {
+    fingerprint: String,
     file_dir: String,
     file_dir_size: u64,
     disk_space: u64,
@@ -48,6 +55,7 @@ pub struct AppState {
     location: String,
     files: Vec<String>,
     port: u16,
+    weight: f32,
 }
 
 impl AppState {
@@ -58,17 +66,26 @@ impl AppState {
         bandwidth: u32,
         location: String,
     ) -> AppState {
+        let mut rng = rand::thread_rng();
+        let weight = rng.gen_range(0.0, 1.0);
+        let fingerprint = format!("node-{}", rng.gen::<u32>());
+
+        // let num_files = (weight * 10.0) as i8;
+
         let mut instance = AppState {
+            fingerprint: fingerprint.clone(),
             port,
             file_dir,
             file_dir_size: 0,
             disk_space,
             bandwidth: bandwidth / 8,
             location,
-            files: Vec::new(),
+            files: generate_random_file_names(2, fingerprint.clone()),
+            weight,
         };
 
-        instance.files_changed();
+        instance.print_state();
+        // instance.files_changed();
 
         instance
     }
@@ -101,24 +118,35 @@ impl AppState {
             Disk Usage: {:.2}%,
             Location: {},
             Bandwidth: {}Mbit/s,
-            Files: {:?}
+            Files: {:?},
+            Weight: {}
         ",
             self.disk_usage() * 100.0,
             self.location,
             self.bandwidth * 8,
             self.files,
+            self.weight
         );
     }
 
     fn calculate_weight(&mut self) -> f32 {
-        return 0.78;
-    }
-
-    fn send_ping_to_monitor(&mut self, ping: Ping) {
-        // IMPLEMENT
+        return self.weight;
     }
 }
 
 impl Actor for AppState {
     type Context = Context<Self>;
+}
+
+fn generate_random_file_names(n: i8, seed: String) -> Vec<String> {
+    let mut files: Vec<String> = vec![];
+    let mut hasher = DefaultHasher::new();
+    for i in 0..n {
+        let tmp = format!("{}{}", seed, i);
+        tmp.hash(&mut hasher);
+        let file_hash = hasher.finish().to_string();
+        files.push(file_hash);
+    }
+
+    return files;
 }
