@@ -507,25 +507,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "client"
-version = "0.1.0"
-dependencies = [
- "actix",
- "actix-files",
- "actix-multipart",
- "actix-rt",
- "actix-web",
- "chrono",
- "futures",
- "rand",
- "reqwest",
- "rusqlite",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1213,6 +1194,25 @@ dependencies = [
  "cfg-if",
  "libc",
  "winapi 0.3.8",
+]
+
+[[package]]
+name = "node"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-files",
+ "actix-multipart",
+ "actix-rt",
+ "actix-web",
+ "chrono",
+ "futures",
+ "rand",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

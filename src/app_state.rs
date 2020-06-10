@@ -12,16 +12,16 @@ pub struct Ping {
     pub files: Vec<String>,
 }
 // PING
-pub struct SendPing();
+pub struct GeneratePingMessage();
 
-impl Message for SendPing {
+impl Message for GeneratePingMessage {
     type Result = Ping;
 }
 
-impl Handler<SendPing> for AppState {
-    type Result = MessageResult<SendPing>;
+impl Handler<GeneratePingMessage> for AppState {
+    type Result = MessageResult<GeneratePingMessage>;
 
-    fn handle(&mut self, _msg: SendPing, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, _msg: GeneratePingMessage, _: &mut Context<Self>) -> Self::Result {
         let ping = Ping {
             fingerprint: self.fingerprint.clone(),
             port: self.port,
@@ -45,6 +45,40 @@ impl Handler<FilesChanged> for AppState {
     }
 }
 
+pub struct UpdateFilesToSync {
+    pub hashes: Vec<String>,
+}
+
+impl Message for UpdateFilesToSync {
+    type Result = bool;
+}
+
+impl Handler<UpdateFilesToSync> for AppState {
+    type Result = bool;
+
+    fn handle(&mut self, msg: UpdateFilesToSync, _ctx: &mut Self::Context) -> Self::Result {
+        self.files_to_sync.extend(msg.hashes.iter().cloned());
+        println!("{:?}", self.files_to_sync);
+        true
+    }
+}
+
+pub struct NextHash {}
+impl Message for NextHash {
+    type Result = Option<String>;
+}
+impl Handler<NextHash> for AppState {
+    type Result = Option<String>;
+
+    fn handle(&mut self, _msg: NextHash, ctx: &mut Self::Context) -> Self::Result {
+        if self.files_to_sync.is_empty() {
+            None
+        } else {
+            Some(self.files_to_sync.remove(0))
+        }
+    }
+}
+
 // MYACTOR
 pub struct AppState {
     fingerprint: String,
@@ -56,6 +90,7 @@ pub struct AppState {
     files: Vec<String>,
     port: u16,
     weight: f32,
+    files_to_sync: Vec<String>,
 }
 
 impl AppState {
@@ -82,6 +117,7 @@ impl AppState {
             location,
             files: generate_random_file_names(2, fingerprint.clone()),
             weight,
+            files_to_sync: vec![],
         };
 
         instance.print_state();
@@ -119,13 +155,15 @@ impl AppState {
             Location: {},
             Bandwidth: {}Mbit/s,
             Files: {:?},
-            Weight: {}
+            Weight: {},
+            Files to sync: {:?},
         ",
             self.disk_usage() * 100.0,
             self.location,
             self.bandwidth * 8,
             self.files,
-            self.weight
+            self.weight,
+            self.files_to_sync
         );
     }
 

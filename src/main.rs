@@ -8,6 +8,7 @@ extern crate serde;
 
 mod app_state;
 mod availability_actor;
+mod loops;
 mod ping;
 mod server;
 
@@ -28,11 +29,12 @@ async fn main() {
         .start(),
     );
     // let server_fut = server::start_server(app_state.clone());
-    let ping_fut_1 = ping::start(app_state.clone());
+    let ping_fut = loops::start_ping(app_state.clone());
+    let sync_fut = loops::start_syncing(app_state.clone());
 
     println!("Services started");
 
     // let _ = tokio::try_join!(server_fut);
-    let _ = tokio::try_join!(ping_fut_1);
+    let _ = tokio::try_join!(ping_fut, sync_fut);
     actix::System::current().stop();
 }
