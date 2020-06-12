@@ -4,6 +4,11 @@ use serde::Serialize;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+pub struct GeneratedPing {
+    pub ping: Ping,
+    pub monitor_addr: String,
+}
+
 #[derive(Serialize)]
 pub struct Ping {
     pub fingerprint: String,
@@ -15,7 +20,7 @@ pub struct Ping {
 pub struct GeneratePingMessage();
 
 impl Message for GeneratePingMessage {
-    type Result = Ping;
+    type Result = GeneratedPing;
 }
 
 impl Handler<GeneratePingMessage> for AppState {
@@ -28,7 +33,13 @@ impl Handler<GeneratePingMessage> for AppState {
             weight: self.calculate_weight(),
             files: self.files.clone(),
         };
-        MessageResult(ping)
+
+        let generated_ping = GeneratedPing {
+            ping,
+            monitor_addr: self.monitor_addr.clone(),
+        };
+
+        MessageResult(generated_ping)
     }
 }
 
@@ -57,8 +68,27 @@ impl Handler<UpdateFilesToSync> for AppState {
     type Result = bool;
 
     fn handle(&mut self, msg: UpdateFilesToSync, _ctx: &mut Self::Context) -> Self::Result {
-        self.files_to_sync.extend(msg.hashes.iter().cloned());
-        println!("{:?}", self.files_to_sync);
+        for hash in msg.hashes {
+            if !self.files.contains(&hash) {
+                self.files_to_sync.push(hash);
+            }
+        }
+        // self.files_to_sync.extend(msg.hashes.iter().cloned());
+        self.print_state();
+        true
+    }
+}
+
+pub struct RecoveredFile {
+    pub hash: String,
+}
+impl Message for RecoveredFile {
+    type Result = bool;
+}
+impl Handler<RecoveredFile> for AppState {
+    type Result = bool;
+    fn handle(&mut self, msg: RecoveredFile, _ctx: &mut Self::Context) -> Self::Result {
+        self.files.push(msg.hash);
         true
     }
 }
@@ -70,7 +100,7 @@ impl Message for NextHash {
 impl Handler<NextHash> for AppState {
     type Result = Option<String>;
 
-    fn handle(&mut self, _msg: NextHash, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: NextHash, _ctx: &mut Self::Context) -> Self::Result {
         if self.files_to_sync.is_empty() {
             None
         } else {
@@ -79,8 +109,22 @@ impl Handler<NextHash> for AppState {
     }
 }
 
+pub struct ManagerAddr {}
+impl Message for ManagerAddr {
+    type Result = String;
+}
+impl Handler<ManagerAddr> for AppState {
+    type Result = String;
+
+    fn handle(&mut self, _msg: ManagerAddr, _ctx: &mut Self::Context) -> Self::Result {
+        return self.manager_addr.clone();
+    }
+}
+
 // MYACTOR
 pub struct AppState {
+    manager_addr: String,
+    monitor_addr: String,
     fingerprint: String,
     file_dir: String,
     file_dir_size: u64,
@@ -95,6 +139,8 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
+        manager_addr: String,
+        monitor_addr: String,
         port: u16,
         file_dir: String,
         disk_space: u64,
@@ -108,6 +154,8 @@ impl AppState {
         // let num_files = (weight * 10.0) as i8;
 
         let mut instance = AppState {
+            manager_addr,
+            monitor_addr,
             fingerprint: fingerprint.clone(),
             port,
             file_dir,
@@ -150,20 +198,12 @@ impl AppState {
 
     fn print_state(&mut self) {
         println!(
-            "
-            Disk Usage: {:.2}%,
-            Location: {},
-            Bandwidth: {}Mbit/s,
-            Files: {:?},
-            Weight: {},
-            Files to sync: {:?},
-        ",
-            self.disk_usage() * 100.0,
-            self.location,
-            self.bandwidth * 8,
-            self.files,
-            self.weight,
-            self.files_to_sync
+            "\n\
+            Fingerprint: {}\n\
+            Files: {:#?}\n\
+            To Sync: {:#?}\
+            ",
+            self.fingerprint, self.files, self.files_to_sync
         );
     }
 

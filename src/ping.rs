@@ -9,12 +9,13 @@ struct PingResponse {
 }
 
 pub async fn send_ping_to_monitor(app_state: Arc<Addr<AppState>>) {
-    let ping = app_state.send(GeneratePingMessage {}).await;
-    match ping {
-        Ok(ping) => {
+    let generated_ping = app_state.send(GeneratePingMessage {}).await;
+    match generated_ping {
+        Ok(generated_ping) => {
+            let url = format!("{}/ping", generated_ping.monitor_addr);
             let response = reqwest::Client::new()
-                .post("http://localhost:3000/ping")
-                .json(&ping)
+                .post(&url)
+                .json(&generated_ping.ping)
                 .send()
                 .await;
 
@@ -57,8 +58,7 @@ async fn handle_ping_response(
     match response.status() {
         reqwest::StatusCode::OK => {
             println!("[{}] Ping send successfully", chrono::Utc::now());
-            let ping_response = response.json::<PingResponse>().await;
-            let ping_response = ping_response?;
+            let ping_response = response.json::<PingResponse>().await?;
 
             let _ = app_state
                 .send(UpdateFilesToSync {
