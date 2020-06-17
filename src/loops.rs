@@ -16,7 +16,7 @@ pub async fn start_ping(app_state: Arc<Addr<AppState>>) -> std::io::Result<()> {
         loop {
             // let _ = app_state.send(Ping(1)).await;
             // let _res = availability_stat.send(Trigger()).await;
-            let _ = ping::send_ping_to_monitor(app_state.clone()).await;
+            let _ = ping::ping_monitor(app_state.clone()).await;
 
             std::thread::sleep(Duration::from_secs(15));
         }
@@ -57,17 +57,14 @@ async fn lookup_hash(
     manager_addr: &str,
     hash: &str,
 ) -> Result<HashMap<String, String>, reqwest::Error> {
-    let url = format!("{}/lookup", manager_addr);
-    let mut body = HashMap::new();
-    body.insert("hash", hash);
+    let url = format!("{}/lookup/{}", manager_addr, hash);
 
-    let map = reqwest::Client::new()
-        .post(&url)
-        .json(&body)
+    let response = reqwest::Client::new()
+        .get(&url)
         .send()
         .await?
         .json::<HashMap<String, String>>()
         .await?;
 
-    Ok(map)
+    Ok(response)
 }

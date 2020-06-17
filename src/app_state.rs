@@ -1,4 +1,5 @@
 use actix::prelude::*;
+use log::info;
 use rand::Rng;
 use serde::Serialize;
 use std::collections::hash_map::DefaultHasher;
@@ -197,12 +198,12 @@ impl AppState {
     }
 
     fn print_state(&mut self) {
-        println!(
+        info!(
             "\n\
-            Fingerprint: {}\n\
-            Files: {:#?}\n\
-            To Sync: {:#?}\
-            ",
+            \tFingerprint: {}\n\
+            \tFiles: {:#?}\n\
+            \tTo Sync: {:#?}\
+        ",
             self.fingerprint, self.files, self.files_to_sync
         );
     }
