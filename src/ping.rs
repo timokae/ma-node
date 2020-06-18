@@ -49,7 +49,7 @@ fn handle_request_error(error: reqwest::Error) {
             error!("redirect loop at {}", final_stop);
         }
     } else if error.is_builder() {
-        eprintln!("Builder error");
+        error!("Builder error");
     } else if error.is_status() {
         if let Some(status) = error.status() {
             error!("Status error {}", status);

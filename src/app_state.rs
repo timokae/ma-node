@@ -110,15 +110,15 @@ impl Handler<NextHash> for AppState {
     }
 }
 
-pub struct ManagerAddr {}
-impl Message for ManagerAddr {
+pub struct MonitorAddr {}
+impl Message for MonitorAddr {
     type Result = String;
 }
-impl Handler<ManagerAddr> for AppState {
+impl Handler<MonitorAddr> for AppState {
     type Result = String;
 
-    fn handle(&mut self, _msg: ManagerAddr, _ctx: &mut Self::Context) -> Self::Result {
-        return self.manager_addr.clone();
+    fn handle(&mut self, _msg: MonitorAddr, _ctx: &mut Self::Context) -> Self::Result {
+        return self.monitor_addr.clone();
     }
 }
 

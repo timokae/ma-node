@@ -2,6 +2,7 @@ use crate::app_state;
 use crate::ping;
 
 use actix::prelude::*;
+use log::info;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,15 +29,15 @@ pub async fn start_ping(app_state: Arc<Addr<AppState>>) -> std::io::Result<()> {
 }
 
 pub async fn start_syncing(app_state: Arc<Addr<AppState>>) -> std::io::Result<()> {
-    let manager_addr = app_state.send(app_state::ManagerAddr {}).await.unwrap();
+    let monitor_addr = app_state.send(app_state::MonitorAddr {}).await.unwrap();
     let _ = tokio::spawn(async move {
         loop {
             if let Ok(next_hash) = app_state.send(app_state::NextHash {}).await {
                 match next_hash {
                     Some(hash) => {
-                        println!("Syncing {}", &hash);
-                        let result = lookup_hash(&manager_addr, &hash).await;
-                        println!("{:?}", result);
+                        info!("Syncing {}", &hash);
+                        let result = lookup_hash(&monitor_addr, &hash).await;
+                        info!("{:?}", result);
 
                         let _ = app_state
                             .send(app_state::RecoveredFile { hash: hash })
@@ -54,10 +55,10 @@ pub async fn start_syncing(app_state: Arc<Addr<AppState>>) -> std::io::Result<()
 }
 
 async fn lookup_hash(
-    manager_addr: &str,
+    monitor_addr: &str,
     hash: &str,
 ) -> Result<HashMap<String, String>, reqwest::Error> {
-    let url = format!("{}/lookup/{}", manager_addr, hash);
+    let url = format!("{}/lookup/{}?forward=true", monitor_addr, hash);
 
     let response = reqwest::Client::new()
         .get(&url)

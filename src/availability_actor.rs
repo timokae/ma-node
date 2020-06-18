@@ -1,7 +1,7 @@
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
+use log::error;
 use rusqlite::{Connection, Result, NO_PARAMS};
-
 struct AvailabilityRow {
     started_at: i64,
     last_timestamp: i64,
@@ -28,11 +28,11 @@ impl AvailabilityActor {
             interval: 10,
         };
         let _create_table_res = instance.create_table();
-        // eprintln!("{:?}", create_table_res);
+        // error!("{:?}", create_table_res);
         let _new_entry_result = instance.new_entry();
-        // eprintln!("{:?}", new_entry_result);
+        // error!("{:?}", new_entry_result);
         let _log_res = instance.log();
-        // eprintln!("{:?}", log_res);
+        // error!("{:?}", log_res);
         instance
     }
 
@@ -143,7 +143,7 @@ impl Handler<Trigger> for AvailabilityActor {
         }
         self.last_timestamp = Utc::now();
         let _res = self.log();
-        // eprintln!("{:?}", res);
+        // error!("{:?}", res);
 
         self.uptime = self.uptime_stats();
         0
