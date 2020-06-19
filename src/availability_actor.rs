@@ -1,6 +1,5 @@
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
-use log::error;
 use rusqlite::{Connection, Result, NO_PARAMS};
 struct AvailabilityRow {
     started_at: i64,

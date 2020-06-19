@@ -58,20 +58,18 @@ impl Handler<FilesChanged> for AppState {
 }
 
 pub struct UpdateFilesToSync {
-    pub hashes: Vec<String>,
+    pub entries: Vec<RecoverEntry>,
 }
-
 impl Message for UpdateFilesToSync {
     type Result = bool;
 }
-
 impl Handler<UpdateFilesToSync> for AppState {
     type Result = bool;
 
     fn handle(&mut self, msg: UpdateFilesToSync, _ctx: &mut Self::Context) -> Self::Result {
-        for hash in msg.hashes {
-            if !self.files.contains(&hash) {
-                self.files_to_sync.push(hash);
+        for entry in msg.entries {
+            if !self.files.contains(&entry.hash) {
+                self.files_to_sync.push(entry);
             }
         }
         // self.files_to_sync.extend(msg.hashes.iter().cloned());
@@ -94,19 +92,18 @@ impl Handler<RecoveredFile> for AppState {
     }
 }
 
-pub struct NextHash {}
-impl Message for NextHash {
-    type Result = Option<String>;
+pub struct NextFileToRecover {}
+impl Message for NextFileToRecover {
+    type Result = Option<RecoverEntry>;
 }
-impl Handler<NextHash> for AppState {
-    type Result = Option<String>;
+impl Handler<NextFileToRecover> for AppState {
+    type Result = Option<RecoverEntry>;
 
-    fn handle(&mut self, _msg: NextHash, _ctx: &mut Self::Context) -> Self::Result {
-        if self.files_to_sync.is_empty() {
-            None
-        } else {
-            Some(self.files_to_sync.remove(0))
-        }
+    fn handle(&mut self, _msg: NextFileToRecover, _ctx: &mut Self::Context) -> Self::Result {
+        self.files_to_sync
+            .iter()
+            .position(|entry| entry.waited_enough())
+            .and_then(|index| Some(self.files_to_sync.remove(index)))
     }
 }
 
@@ -122,6 +119,22 @@ impl Handler<MonitorAddr> for AppState {
     }
 }
 
+#[derive(Debug)]
+pub struct RecoverEntry {
+    pub hash: String,
+    pub last_checked: chrono::DateTime<chrono::Utc>,
+}
+
+impl RecoverEntry {
+    fn waited_enough(&self) -> bool {
+        let t1 = self.last_checked.timestamp();
+        let t2 = chrono::Utc::now().timestamp();
+        let dif = t2 - t1;
+        dif > 5 * 60
+    }
+}
+
+#[allow(dead_code)]
 // MYACTOR
 pub struct AppState {
     manager_addr: String,
@@ -135,9 +148,10 @@ pub struct AppState {
     files: Vec<String>,
     port: u16,
     weight: f32,
-    files_to_sync: Vec<String>,
+    files_to_sync: Vec<RecoverEntry>,
 }
 
+#[allow(dead_code)]
 impl AppState {
     pub fn new(
         manager_addr: String,

@@ -10,8 +10,8 @@ extern crate serde;
 
 mod app_state;
 mod availability_actor;
-mod loops;
-mod ping;
+mod ping_service;
+mod recover_service;
 mod server;
 
 use actix::prelude::*;
@@ -19,11 +19,19 @@ use app_state::AppState;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::sync::Arc;
 
 #[actix_rt::main]
 async fn main() {
     setup_logger();
+
+    let args: Vec<String> = env::args().collect();
+    info!("{:?}", args);
+    if args.len() < 2 {
+        panic!("Not enough arguments")
+    }
+    let port: &u16 = &args[1].parse::<u16>().unwrap_or(8080);
 
     let manager_addr = String::from("http://localhost:3000");
     let monitor_addr = get_monitor_addr(&manager_addr).await;
@@ -32,7 +40,7 @@ async fn main() {
         AppState::new(
             manager_addr,
             monitor_addr,
-            8080,
+            *port,
             String::from("./files"),
             20000000,
             120000,
@@ -41,13 +49,13 @@ async fn main() {
         .start(),
     );
     // let server_fut = server::start_server(app_state.clone());
-    let ping_fut = loops::start_ping(app_state.clone());
-    let sync_fut = loops::start_syncing(app_state.clone());
+    let ping_fut = ping_service::start_ping_loop(app_state.clone());
+    let recover_fut = recover_service::start_recover_loop(app_state.clone());
 
     info!("Services started");
 
     // let _ = tokio::try_join!(server_fut);
-    let _ = tokio::try_join!(ping_fut, sync_fut);
+    let _ = tokio::try_join!(ping_fut, recover_fut);
     actix::System::current().stop();
 }
 
