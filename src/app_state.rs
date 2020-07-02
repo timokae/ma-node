@@ -3,6 +3,7 @@ use log::info;
 use rand::Rng;
 use serde::Serialize;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 pub struct GeneratedPing {
@@ -32,7 +33,7 @@ impl Handler<GeneratePingMessage> for AppState {
             fingerprint: self.fingerprint.clone(),
             port: self.port,
             weight: self.calculate_weight(),
-            files: self.files.clone(),
+            files: self.saved_hashes(),
         };
 
         let generated_ping = GeneratedPing {
@@ -40,20 +41,43 @@ impl Handler<GeneratePingMessage> for AppState {
             monitor_addr: self.monitor_addr.clone(),
         };
 
+        info!("{:?}", self.files.clone());
+
         MessageResult(generated_ping)
     }
 }
 
-pub struct FilesChanged();
-impl Message for FilesChanged {
+pub struct NewFile {
+    pub content: String,
+}
+impl Message for NewFile {
     type Result = u64;
 }
-impl Handler<FilesChanged> for AppState {
+impl Handler<NewFile> for AppState {
     type Result = u64;
 
-    fn handle(&mut self, _msg: FilesChanged, _ctx: &mut Self::Context) -> Self::Result {
-        self.files_changed();
+    fn handle(&mut self, msg: NewFile, _ctx: &mut Self::Context) -> Self::Result {
+        let hash = self.hash_content(&msg.content);
+
+        self.files.insert(hash, msg.content);
         self.file_dir_size
+    }
+}
+
+pub struct GetFile {
+    pub hash: String,
+}
+impl Message for GetFile {
+    type Result = Option<String>;
+}
+impl Handler<GetFile> for AppState {
+    type Result = Option<String>;
+
+    fn handle(&mut self, msg: GetFile, _ctx: &mut Self::Context) -> Self::Result {
+        match self.files.get(&msg.hash) {
+            Some(result) => Some(String::from(result.clone())),
+            None => None,
+        }
     }
 }
 
@@ -68,18 +92,25 @@ impl Handler<UpdateFilesToSync> for AppState {
 
     fn handle(&mut self, msg: UpdateFilesToSync, _ctx: &mut Self::Context) -> Self::Result {
         for entry in msg.entries {
-            if !self.files.contains(&entry.hash) {
+            if !self.files.contains_key(&entry.hash) {
                 self.files_to_sync.push(entry);
             }
         }
-        // self.files_to_sync.extend(msg.hashes.iter().cloned());
-        self.print_state();
         true
+        // for entry in msg.entries {
+        //     if !self.files.contains(&entry.hash) {
+        //         self.files_to_sync.push(entry);
+        //     }
+        // }
+        // // self.files_to_sync.extend(msg.hashes.iter().cloned());
+        // self.print_state();
+        // true
     }
 }
 
 pub struct RecoveredFile {
     pub hash: String,
+    pub content: String,
 }
 impl Message for RecoveredFile {
     type Result = bool;
@@ -87,7 +118,7 @@ impl Message for RecoveredFile {
 impl Handler<RecoveredFile> for AppState {
     type Result = bool;
     fn handle(&mut self, msg: RecoveredFile, _ctx: &mut Self::Context) -> Self::Result {
-        self.files.push(msg.hash);
+        self.files.insert(msg.hash, msg.content);
         true
     }
 }
@@ -145,10 +176,11 @@ pub struct AppState {
     disk_space: u64,
     bandwidth: u32,
     location: String,
-    files: Vec<String>,
+    files: HashMap<String, String>,
     port: u16,
     weight: f32,
     files_to_sync: Vec<RecoverEntry>,
+    hasher: DefaultHasher,
 }
 
 #[allow(dead_code)]
@@ -178,9 +210,10 @@ impl AppState {
             disk_space,
             bandwidth: bandwidth / 8,
             location,
-            files: generate_random_file_names(2, fingerprint.clone()),
+            files: HashMap::new(), // generate_random_file_names(2, fingerprint.clone()),
             weight,
             files_to_sync: vec![],
+            hasher: DefaultHasher::new(),
         };
 
         instance.print_state();
@@ -189,23 +222,23 @@ impl AppState {
         instance
     }
 
-    fn files_changed(&mut self) {
-        let path = std::path::Path::new(self.file_dir.as_str());
-        let file_iter = std::fs::read_dir(path).unwrap();
+    // fn files_changed(&mut self) {
+    //     let path = std::path::Path::new(self.file_dir.as_str());
+    //     let file_iter = std::fs::read_dir(path).unwrap();
 
-        let mut total_file_size = 0;
-        self.files.clear();
-        for file in file_iter {
-            let file = file.unwrap();
-            let file_size = std::fs::metadata(file.path()).unwrap().len();
-            total_file_size += file_size;
+    //     let mut total_file_size = 0;
+    //     self.files.clear();
+    //     for file in file_iter {
+    //         let file = file.unwrap();
+    //         let file_size = std::fs::metadata(file.path()).unwrap().len();
+    //         total_file_size += file_size;
 
-            self.files.push(file.file_name().into_string().unwrap());
-        }
+    //         self.files.push(file.file_name().into_string().unwrap());
+    //     }
 
-        self.file_dir_size = total_file_size;
-        self.print_state();
-    }
+    //     self.file_dir_size = total_file_size;
+    //     self.print_state();
+    // }
 
     fn disk_usage(&mut self) -> f32 {
         return (self.file_dir_size as f64 / self.disk_space as f64) as f32;
@@ -225,21 +258,34 @@ impl AppState {
     fn calculate_weight(&mut self) -> f32 {
         return self.weight;
     }
+
+    fn saved_hashes(&mut self) -> Vec<String> {
+        self.files
+            .keys()
+            .map(|key| String::from(key.clone()))
+            .collect()
+    }
+
+    fn hash_content(&mut self, content: &str) -> String {
+        content.hash(&mut self.hasher);
+        let hash = self.hasher.finish().to_string();
+        return hash;
+    }
 }
 
 impl Actor for AppState {
     type Context = Context<Self>;
 }
 
-fn generate_random_file_names(n: i8, seed: String) -> Vec<String> {
-    let mut files: Vec<String> = vec![];
-    let mut hasher = DefaultHasher::new();
-    for i in 0..n {
-        let tmp = format!("{}{}", seed, i);
-        tmp.hash(&mut hasher);
-        let file_hash = hasher.finish().to_string();
-        files.push(file_hash);
-    }
+// fn generate_random_file_names(n: i8, seed: String) -> Vec<String> {
+//     let mut files: Vec<String> = vec![];
+//     let mut hasher = DefaultHasher::new();
+//     for i in 0..n {
+//         let tmp = format!("{}{}", seed, i);
+//         tmp.hash(&mut hasher);
+//         let file_hash = hasher.finish().to_string();
+//         files.push(file_hash);
+//     }
 
-    return files;
-}
+//     return files;
+// }

@@ -62,16 +62,20 @@ async fn handle_lookup_success(
     result: HashMap<String, String>,
 ) {
     info!("{:?}", result);
-    let result = app_state
-        .send(app_state::RecoveredFile {
-            hash: String::from(hash),
-            content: String::from("BLA"),
-        })
-        .await;
-
-    match result {
-        Ok(_) => info!("Recovered file {}", hash),
-        Err(err) => error!("{}", err),
+    let node_addr = result.get("node_addr").unwrap();
+    // Download from node
+    match download_from_node(node_addr, hash).await {
+        Ok(result) => {
+            let content = result.get("content").unwrap();
+            let _ = app_state
+                .send(app_state::RecoveredFile {
+                    hash: String::from(hash),
+                    content: String::from(content),
+                })
+                .await;
+            info!("Recovered file {} with hash {}", content, hash)
+        }
+        Err(err) => error!("{:?}", err),
     }
 }
 
@@ -87,5 +91,21 @@ async fn handle_lookup_fail(app_state: &Arc<Addr<AppState>>, hash: &str, error: 
     {
         Ok(_) => info!("Failed to recover file {}: {}", hash, error),
         Err(err) => error!("{}", err),
+    }
+}
+
+async fn download_from_node(
+    node_addr: &str,
+    hash: &str,
+) -> Result<HashMap<String, String>, reqwest::Error> {
+    let url = format!("{}/download/{}", node_addr, hash);
+    let response = reqwest::Client::new().get(&url).send().await?;
+
+    match response.error_for_status() {
+        Ok(res) => {
+            let result = res.json::<HashMap<String, String>>().await?;
+            return Ok(result);
+        }
+        Err(err) => Err(err),
     }
 }
