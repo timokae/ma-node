@@ -3,9 +3,9 @@ use crate::app_state::{
 };
 use actix::prelude::*;
 use chrono::{TimeZone, Utc};
-use log::error;
+use log::{error, info};
 use serde::Deserialize;
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 use std::time::Duration;
 
 #[derive(Deserialize)]
@@ -14,7 +14,10 @@ pub struct PingResponse {
     files_to_recover: Vec<String>,
 }
 
-pub async fn start_ping_loop(app_state: Arc<Addr<AppState>>) -> std::io::Result<()> {
+pub async fn start_ping_loop(
+    app_state: Arc<Addr<AppState>>,
+    keep_running: Arc<AtomicBool>,
+) -> std::io::Result<()> {
     // let availability_stat = AvailabilityActor::new().start();
     let _ = tokio::spawn(async move {
         loop {
@@ -22,7 +25,12 @@ pub async fn start_ping_loop(app_state: Arc<Addr<AppState>>) -> std::io::Result<
             // let _res = availability_stat.send(Trigger()).await;
             let _ = ping_monitor(app_state.clone()).await;
 
-            std::thread::sleep(Duration::from_secs(15));
+            if keep_running.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_secs(15));
+            } else {
+                info!("Shutting down ping service");
+                break;
+            }
         }
     })
     .await

@@ -15,20 +15,23 @@ struct JsonResponse {
 }
 
 #[allow(dead_code)]
-pub async fn start_server(app_state: Arc<Addr<AppState>>) -> std::io::Result<()> {
+pub async fn start_server(app_state: Arc<Addr<AppState>>, port: u16) -> std::io::Result<()> {
+    let addr = format!("0.0.0.0:{}", port);
     let app_data = web::Data::new(app_state);
     HttpServer::new(move || {
         App::new()
             .app_data(app_data.clone())
             .route("/", web::get().to(index))
-            .route("/upload", web::post().to(save_file))
+            // .route("/upload", web::post().to(upload))
+            .route("/upload:*", web::post().to(upload))
             .route("/{download:.*}", web::get().to(download))
     })
-    .bind("0.0.0.0:8080")?
-    .shutdown_timeout(2)
+    .bind(addr)?
     .run()
     .await
     .unwrap();
+
+    info!("Shutting down server.");
 
     Ok(())
 }

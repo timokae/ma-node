@@ -2,6 +2,7 @@ extern crate actix;
 extern crate actix_multipart;
 extern crate actix_rt;
 extern crate actix_web;
+extern crate ctrlc;
 extern crate fern;
 extern crate futures;
 extern crate log;
@@ -20,11 +21,14 @@ use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 
 #[actix_rt::main]
 async fn main() {
     setup_logger();
+
+    let keep_running: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
+    setup_close_handler(keep_running.clone());
 
     let args: Vec<String> = env::args().collect();
     info!("{:?}", args);
@@ -48,15 +52,15 @@ async fn main() {
         )
         .start(),
     );
-    // let server_fut = server::start_server(app_state.clone());
-    let ping_fut = ping_service::start_ping_loop(app_state.clone());
-    let recover_fut = recover_service::start_recover_loop(app_state.clone());
+
+    let server_fut = server::start_server(app_state.clone(), *port);
+    let ping_fut = ping_service::start_ping_loop(app_state.clone(), keep_running.clone());
+    let recover_fut = recover_service::start_recover_loop(app_state.clone(), keep_running.clone());
 
     info!("Services started");
 
     // let _ = tokio::try_join!(server_fut);
-    let _ = tokio::try_join!(ping_fut, recover_fut);
-    actix::System::current().stop();
+    let _ = tokio::try_join!(ping_fut, recover_fut, server_fut);
 }
 
 #[derive(Serialize, Deserialize)]
@@ -108,4 +112,12 @@ fn setup_logger() {
         .level(log::LevelFilter::Info)
         .apply()
         .unwrap();
+}
+
+fn setup_close_handler(keep_running: Arc<AtomicBool>) {
+    ctrlc::set_handler(move || {
+        info!("Send signal to terminate.");
+        keep_running.swap(false, Ordering::Relaxed);
+    })
+    .expect("Error setting Ctrl-C handler");
 }

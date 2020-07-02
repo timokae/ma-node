@@ -3,11 +3,14 @@ use crate::app_state;
 use actix::prelude::*;
 use log::{error, info};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 
 use crate::app_state::{AppState, RecoverEntry};
 
-pub async fn start_recover_loop(app_state: Arc<Addr<AppState>>) -> std::io::Result<()> {
+pub async fn start_recover_loop(
+    app_state: Arc<Addr<AppState>>,
+    keep_running: Arc<AtomicBool>,
+) -> std::io::Result<()> {
     let monitor_addr = app_state.send(app_state::MonitorAddr {}).await.unwrap();
     let _ = tokio::spawn(async move {
         loop {
@@ -19,6 +22,11 @@ pub async fn start_recover_loop(app_state: Arc<Addr<AppState>>) -> std::io::Resu
                     },
                     None => std::thread::sleep(std::time::Duration::from_secs(2)),
                 }
+            }
+
+            if !keep_running.load(Ordering::Relaxed) {
+                info!("Sutting down recover service");
+                break;
             }
         }
     })
@@ -57,6 +65,7 @@ async fn handle_lookup_success(
     let result = app_state
         .send(app_state::RecoveredFile {
             hash: String::from(hash),
+            content: String::from("BLA"),
         })
         .await;
 
