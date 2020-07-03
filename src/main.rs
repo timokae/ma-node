@@ -2,6 +2,7 @@ extern crate actix;
 extern crate actix_multipart;
 extern crate actix_rt;
 extern crate actix_web;
+extern crate async_trait;
 extern crate ctrlc;
 extern crate fern;
 extern crate futures;
@@ -11,20 +12,26 @@ extern crate serde;
 
 mod app_state;
 mod availability_actor;
+mod config_store;
+mod file_store;
 mod ping_service;
 mod recover_service;
 mod server;
+mod service;
 
-use actix::prelude::*;
 use app_state::AppState;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
+use ping_service::PingService;
+use rand::Rng;
+use recover_service::RecoverService;
 use serde::{Deserialize, Serialize};
+// use service::Service;
 use std::env;
-use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
+use std::sync::{atomic::AtomicBool, atomic::Ordering, mpsc, Arc};
 
 #[actix_rt::main]
-async fn main() {
+async fn main() -> std::io::Result<()> {
     setup_logger();
 
     let keep_running: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
@@ -39,28 +46,30 @@ async fn main() {
 
     let manager_addr = String::from("http://localhost:3000");
     let monitor_addr = get_monitor_addr(&manager_addr).await;
+
+    let mut rng = rand::thread_rng();
+    // let weight = rng.gen_range(0.0, 1.0);
+    let fingerprint = format!("node-{}", rng.gen::<u32>());
+
     info!("Assigned to monitor on address {}", monitor_addr);
-    let app_state = Arc::new(
-        AppState::new(
-            manager_addr,
-            monitor_addr,
-            *port,
-            String::from("./files"),
-            20000000,
-            120000,
-            String::from("Germany"),
-        )
-        .start(),
-    );
 
-    let server_fut = server::start_server(app_state.clone(), *port);
-    let ping_fut = ping_service::start_ping_loop(app_state.clone(), keep_running.clone());
-    let recover_fut = recover_service::start_recover_loop(app_state.clone(), keep_running.clone());
+    let app_state = Arc::new(AppState::new(
+        &manager_addr,
+        &monitor_addr,
+        *port,
+        &fingerprint,
+    ));
 
+    let ping_service = PingService::new(app_state.clone(), keep_running.clone(), 5);
+    let recover_service = RecoverService::new(app_state.clone(), keep_running.clone(), 7);
+
+    let server_fut = server::start_server(app_state.clone());
+    let ping_fut = ping_service.start();
+    let recover_fut = recover_service.start();
     info!("Services started");
 
-    // let _ = tokio::try_join!(server_fut);
-    let _ = tokio::try_join!(ping_fut, recover_fut, server_fut);
+    let _ = tokio::try_join!(ping_fut, recover_fut);
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize)]
