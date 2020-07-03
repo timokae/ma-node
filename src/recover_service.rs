@@ -1,6 +1,3 @@
-use crate::app_state;
-
-use actix::prelude::*;
 use log::{error, info};
 use std::collections::HashMap;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
@@ -8,19 +5,19 @@ use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 use crate::app_state::{AppState, RecoverEntry};
 
 pub async fn start_recover_loop(
-    app_state: Arc<Addr<AppState>>,
+    app_state: Arc<AppState>,
     keep_running: Arc<AtomicBool>,
 ) -> std::io::Result<()> {
-    let monitor_addr = app_state.send(app_state::MonitorAddr {}).await.unwrap();
     let _ = tokio::spawn(async move {
         loop {
-            if let Ok(entry_opt) = &app_state.send(app_state::NextFileToRecover {}).await {
-                match entry_opt {
-                    Some(entry) => match lookup_hash(&monitor_addr, &entry.hash).await {
-                        Ok(result) => handle_lookup_success(&app_state, &entry.hash, result).await,
-                        Err(err) => handle_lookup_fail(&app_state, &entry.hash, err).await,
-                    },
-                    None => std::thread::sleep(std::time::Duration::from_secs(2)),
+            let monitor_addr = app_state.clone().config_store.read().unwrap().monitor();
+            let recover_opt = app_state.file_store.write().unwrap().next_file_to_recover();
+            if let Some(entry) = recover_opt {
+                match lookup_hash(&monitor_addr, &entry.hash).await {
+                    Ok(result) => {
+                        handle_lookup_success(app_state.clone(), &entry.hash, result).await
+                    }
+                    Err(err) => handle_lookup_fail(&app_state, &entry.hash, err).await,
                 }
             }
 
@@ -57,41 +54,52 @@ async fn lookup_hash(
 }
 
 async fn handle_lookup_success(
-    app_state: &Arc<Addr<AppState>>,
+    app_state: Arc<AppState>,
     hash: &str,
     result: HashMap<String, String>,
 ) {
     info!("{:?}", result);
     let node_addr = result.get("node_addr").unwrap();
-    // Download from node
+
     match download_from_node(node_addr, hash).await {
         Ok(result) => {
             let content = result.get("content").unwrap();
-            let _ = app_state
-                .send(app_state::RecoveredFile {
-                    hash: String::from(hash),
-                    content: String::from(content),
-                })
-                .await;
+            // let x = &app_state.clone().file_store;
+            // &app_state.clone().insert_new_file(content);
+            // app_state.insert_new_file(content);
+            let hash = app_state
+                .config_store
+                .write()
+                .unwrap()
+                .hash_content(content);
             info!("Recovered file {} with hash {}", content, hash)
         }
         Err(err) => error!("{:?}", err),
     }
 }
 
-async fn handle_lookup_fail(app_state: &Arc<Addr<AppState>>, hash: &str, error: reqwest::Error) {
+async fn handle_lookup_fail(app_state: &Arc<AppState>, hash: &str, error: reqwest::Error) {
     let entries = vec![RecoverEntry {
         hash: String::from(hash),
         last_checked: chrono::Utc::now(),
     }];
 
-    match app_state
-        .send(app_state::UpdateFilesToSync { entries })
-        .await
-    {
-        Ok(_) => info!("Failed to recover file {}: {}", hash, error),
-        Err(err) => error!("{}", err),
-    }
+    // match app_state
+    //     .send(app_state::UpdateFilesToSync { entries })
+    //     .await
+    // {
+    //     Ok(_) => info!("Failed to recover file {}: {}", hash, error),
+    //     Err(err) => error!("{}", err),
+    // }
+    app_state
+        .file_store
+        .write()
+        .unwrap()
+        .insert_files_to_recover(entries);
+    error!(
+        "Failed to recover {}, trying again later! Reason: {}",
+        hash, error
+    );
 }
 
 async fn download_from_node(

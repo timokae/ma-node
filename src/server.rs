@@ -1,5 +1,4 @@
-use crate::app_state::{AppState, GetFile, NewFile};
-use actix::prelude::*;
+use crate::app_state::AppState;
 use actix_web::{web, App, Error, HttpResponse, HttpServer};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
@@ -16,8 +15,8 @@ struct JsonResponse {
 }
 
 #[allow(dead_code)]
-pub async fn start_server(app_state: Arc<Addr<AppState>>, port: u16) -> std::io::Result<()> {
-    let addr = format!("0.0.0.0:{}", port);
+pub async fn start_server(app_state: Arc<AppState>) -> std::io::Result<()> {
+    let addr = format!("0.0.0.0:{}", app_state.config_store.read().unwrap().port());
     let app_data = web::Data::new(app_state);
     HttpServer::new(move || {
         App::new()
@@ -60,44 +59,50 @@ struct DownloadResponse {
     content: String,
 }
 async fn download(
-    app_state: web::Data<Arc<Addr<AppState>>>,
+    app_state: web::Data<Arc<AppState>>,
     info: web::Path<String>,
 ) -> Result<HttpResponse, Error> {
-    let content_fut = app_state
-        .send(GetFile {
-            hash: info.to_string(),
-        })
-        .await;
-
-    if let Ok(content_opt) = content_fut {
-        match content_opt {
-            Some(content) => {
-                let response = DownloadResponse { content };
-                return Ok(HttpResponse::Ok().json(response));
-            }
-            None => error!("Could not find file with hash {}", info.to_string()),
+    let hash = &info.to_string();
+    match app_state.file_store.read().unwrap().get_file(hash) {
+        Some(content) => {
+            let response = DownloadResponse {
+                content: String::from(content),
+            };
+            return Ok(HttpResponse::Ok().json(response));
+        }
+        None => {
+            error!("Could not find file with hash {}", info.to_string());
+            Err(actix_web::error::ErrorNotFound("File not found").into())
         }
     }
-    Err(actix_web::error::ErrorNotFound("File not found").into())
 }
 
 #[derive(Deserialize)]
 struct UploadRequest {
     content: String,
 }
+#[derive(Serialize)]
+struct UploadResponse {
+    hash: String,
+    content: String,
+}
 async fn upload(
-    app_state: web::Data<Arc<Addr<AppState>>>,
+    app_state: web::Data<Arc<AppState>>,
     body: web::Json<UploadRequest>,
 ) -> Result<HttpResponse, Error> {
     let content = body.content.clone();
+    let hash = app_state
+        .config_store
+        .write()
+        .unwrap()
+        .hash_content(&content);
+    app_state
+        .file_store
+        .write()
+        .unwrap()
+        .insert_file(&hash, &content);
 
-    let _ = app_state.send(NewFile { content }).await;
-
-    let response = JsonResponse {
-        status: String::from("ok"),
-        message: String::from("KEKW"),
-    };
-
+    let response = UploadResponse { hash, content };
     Ok(HttpResponse::Ok().json(response))
 }
 

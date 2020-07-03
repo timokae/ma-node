@@ -6,6 +6,7 @@ extern crate ctrlc;
 extern crate fern;
 extern crate futures;
 extern crate log;
+extern crate parking_lot;
 extern crate rusqlite;
 extern crate serde;
 
@@ -15,10 +16,10 @@ mod ping_service;
 mod recover_service;
 mod server;
 
-use actix::prelude::*;
 use app_state::AppState;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
@@ -39,27 +40,37 @@ async fn main() {
 
     let manager_addr = String::from("http://localhost:3000");
     let monitor_addr = get_monitor_addr(&manager_addr).await;
-    info!("Assigned to monitor on address {}", monitor_addr);
-    let app_state = Arc::new(
-        AppState::new(
-            manager_addr,
-            monitor_addr,
-            *port,
-            String::from("./files"),
-            20000000,
-            120000,
-            String::from("Germany"),
-        )
-        .start(),
-    );
 
-    let server_fut = server::start_server(app_state.clone(), *port);
+    let mut rng = rand::thread_rng();
+    // let weight = rng.gen_range(0.0, 1.0);
+    let fingerprint = format!("node-{}", rng.gen::<u32>());
+
+    info!("Assigned to monitor on address {}", monitor_addr);
+    // let app_state = Arc::new(
+    //     AppState::new(
+    //         manager_addr,
+    //         monitor_addr,
+    //         *port,
+    //         String::from("./files"),
+    //         20000000,
+    //         120000,
+    //         String::from("Germany"),
+    //     )
+    //     .start(),
+    // );
+    let app_state = Arc::new(AppState::new(
+        &manager_addr,
+        &monitor_addr,
+        *port,
+        &fingerprint,
+    ));
+
+    let server_fut = server::start_server(app_state.clone());
     let ping_fut = ping_service::start_ping_loop(app_state.clone(), keep_running.clone());
     let recover_fut = recover_service::start_recover_loop(app_state.clone(), keep_running.clone());
 
     info!("Services started");
 
-    // let _ = tokio::try_join!(server_fut);
     let _ = tokio::try_join!(ping_fut, recover_fut, server_fut);
 }
 
