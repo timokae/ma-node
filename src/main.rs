@@ -2,29 +2,35 @@ extern crate actix;
 extern crate actix_multipart;
 extern crate actix_rt;
 extern crate actix_web;
+extern crate async_trait;
 extern crate ctrlc;
 extern crate fern;
 extern crate futures;
 extern crate log;
-extern crate parking_lot;
 extern crate rusqlite;
 extern crate serde;
 
 mod app_state;
 mod availability_actor;
+mod config_store;
+mod file_store;
 mod ping_service;
 mod recover_service;
 mod server;
+mod service;
 
 use app_state::AppState;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
+use ping_service::PingService;
 use rand::Rng;
+use recover_service::RecoverService;
 use serde::{Deserialize, Serialize};
+// use service::Service;
 use std::env;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 
-#[actix_rt::main]
+#[tokio::main]
 async fn main() {
     setup_logger();
 
@@ -46,18 +52,7 @@ async fn main() {
     let fingerprint = format!("node-{}", rng.gen::<u32>());
 
     info!("Assigned to monitor on address {}", monitor_addr);
-    // let app_state = Arc::new(
-    //     AppState::new(
-    //         manager_addr,
-    //         monitor_addr,
-    //         *port,
-    //         String::from("./files"),
-    //         20000000,
-    //         120000,
-    //         String::from("Germany"),
-    //     )
-    //     .start(),
-    // );
+
     let app_state = Arc::new(AppState::new(
         &manager_addr,
         &monitor_addr,
@@ -66,9 +61,12 @@ async fn main() {
     ));
 
     let server_fut = server::start_server(app_state.clone());
-    let ping_fut = ping_service::start_ping_loop(app_state.clone(), keep_running.clone());
-    let recover_fut = recover_service::start_recover_loop(app_state.clone(), keep_running.clone());
+    let ping_service = PingService::new(app_state.clone(), keep_running.clone(), 5);
+    let recover_service = RecoverService::new(app_state.clone(), keep_running.clone(), 7);
 
+    let server_fut = server::start_server(app_state.clone());
+    let ping_fut = ping_service.start();
+    let recover_fut = recover_service.start();
     info!("Services started");
 
     let _ = tokio::try_join!(ping_fut, recover_fut, server_fut);
