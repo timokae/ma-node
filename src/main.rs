@@ -1,7 +1,3 @@
-extern crate actix;
-extern crate actix_multipart;
-extern crate actix_rt;
-extern crate actix_web;
 extern crate async_trait;
 extern crate ctrlc;
 extern crate fern;
@@ -28,14 +24,16 @@ use recover_service::RecoverService;
 use serde::{Deserialize, Serialize};
 // use service::Service;
 use std::env;
-use std::sync::{atomic::AtomicBool, atomic::Ordering, mpsc, Arc};
+use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
+use tokio::sync::oneshot;
 
-#[actix_rt::main]
+#[tokio::main]
 async fn main() -> std::io::Result<()> {
+    let (shutdown_tx, shutdown_rx) = oneshot::channel();
     setup_logger();
 
     let keep_running: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
-    setup_close_handler(keep_running.clone());
+    setup_close_handler(keep_running.clone(), shutdown_tx);
 
     let args: Vec<String> = env::args().collect();
     info!("{:?}", args);
@@ -63,12 +61,12 @@ async fn main() -> std::io::Result<()> {
     let ping_service = PingService::new(app_state.clone(), keep_running.clone(), 5);
     let recover_service = RecoverService::new(app_state.clone(), keep_running.clone(), 7);
 
-    let server_fut = server::start_server(app_state.clone());
+    let server_fut = server::start_server(app_state.clone(), shutdown_rx);
     let ping_fut = ping_service.start();
     let recover_fut = recover_service.start();
     info!("Services started");
-
-    let _ = tokio::try_join!(ping_fut, recover_fut);
+    // shutdown_tx.send(()).expect("Shutdown server");
+    let _ = tokio::try_join!(server_fut, ping_fut, recover_fut);
     Ok(())
 }
 
@@ -123,7 +121,7 @@ fn setup_logger() {
         .unwrap();
 }
 
-fn setup_close_handler(keep_running: Arc<AtomicBool>) {
+fn setup_close_handler(keep_running: Arc<AtomicBool>, sender: oneshot::Sender<()>) {
     ctrlc::set_handler(move || {
         info!("Send signal to terminate.");
         keep_running.swap(false, Ordering::Relaxed);
