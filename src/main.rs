@@ -28,10 +28,10 @@ use recover_service::RecoverService;
 use serde::{Deserialize, Serialize};
 // use service::Service;
 use std::env;
-use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
+use std::sync::{atomic::AtomicBool, atomic::Ordering, mpsc, Arc};
 
-#[tokio::main]
-async fn main() {
+#[actix_rt::main]
+async fn main() -> std::io::Result<()> {
     setup_logger();
 
     let keep_running: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
@@ -60,7 +60,6 @@ async fn main() {
         &fingerprint,
     ));
 
-    let server_fut = server::start_server(app_state.clone());
     let ping_service = PingService::new(app_state.clone(), keep_running.clone(), 5);
     let recover_service = RecoverService::new(app_state.clone(), keep_running.clone(), 7);
 
@@ -69,7 +68,8 @@ async fn main() {
     let recover_fut = recover_service.start();
     info!("Services started");
 
-    let _ = tokio::try_join!(ping_fut, recover_fut, server_fut);
+    let _ = tokio::try_join!(ping_fut, recover_fut);
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize)]

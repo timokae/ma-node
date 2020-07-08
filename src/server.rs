@@ -3,9 +3,9 @@ use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::app_state::{AppState};
-use crate::file_store::FileStoreFunc;
+use crate::app_state::AppState;
 use crate::config_store::ConfigStoreFunc;
+use crate::file_store::FileStoreFunc;
 
 #[derive(Serialize)]
 struct JsonResponse {
