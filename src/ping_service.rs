@@ -24,9 +24,8 @@ pub struct PingService {
 
 impl PingService {
     pub async fn start(self) -> std::io::Result<()> {
-        actix::spawn(async move {
-            info!("Starting ping service");
-
+        tokio::spawn(async move {
+            info!("Starting ping service.");
             loop {
                 let _ = PingService::ping_monitor(self.app_state.clone()).await;
 
@@ -37,22 +36,9 @@ impl PingService {
                     break;
                 }
             }
-        });
-        // actix::spawn(async move {
-        //     info!("Starting ping service.");
-        // loop {
-        //     let _ = PingService::ping_monitor(self.app_state.clone()).await;
-
-        //     if self.keep_running.load(Ordering::Relaxed) {
-        //         std::thread::sleep(Duration::from_secs(self.timeout));
-        //     } else {
-        //         info!("Shutting down ping service");
-        //         break;
-        //     }
-        // }
-        // })
-        // .await
-        // .unwrap();
+        })
+        .await
+        .unwrap();
 
         info!("Ping service terminated.");
         Ok(())

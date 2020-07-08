@@ -17,7 +17,7 @@ pub struct RecoverService {
 
 impl RecoverService {
     pub async fn start(self) -> std::io::Result<()> {
-        actix::spawn(async move {
+        tokio::spawn(async move {
             info!("Starting recover service");
             loop {
                 let monitor_addr = self
@@ -63,9 +63,11 @@ impl RecoverService {
                     break;
                 }
             }
-        });
-        // .await
-        // .unwrap();
+        })
+        .await
+        .unwrap();
+
+        info!("Recover service terminated");
 
         Ok(())
     }
