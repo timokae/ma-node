@@ -10,6 +10,7 @@ mod app_state;
 mod availability_actor;
 mod config_store;
 mod file_store;
+mod http_requests;
 mod ping_service;
 mod recover_service;
 mod server;
@@ -17,12 +18,11 @@ mod service;
 
 use app_state::AppState;
 use fern::colors::{Color, ColoredLevelConfig};
+use http_requests::register_on_manager;
 use log::info;
 use ping_service::PingService;
 use rand::Rng;
 use recover_service::RecoverService;
-use serde::{Deserialize, Serialize};
-// use service::Service;
 use std::env;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 use tokio::sync::oneshot;
@@ -43,7 +43,8 @@ async fn main() -> std::io::Result<()> {
     let port: &u16 = &args[1].parse::<u16>().unwrap_or(8080);
 
     let manager_addr = String::from("http://localhost:3000");
-    let monitor_addr = get_monitor_addr(&manager_addr).await;
+    // let monitor_addr = get_monitor_addr(&manager_addr).await;
+    let monitor_addr = register_on_manager(&manager_addr).await.unwrap().monitor;
 
     let mut rng = rand::thread_rng();
     // let weight = rng.gen_range(0.0, 1.0);
@@ -58,8 +59,8 @@ async fn main() -> std::io::Result<()> {
         &fingerprint,
     ));
 
-    let ping_service = PingService::new(app_state.clone(), keep_running.clone(), 5);
-    let recover_service = RecoverService::new(app_state.clone(), keep_running.clone(), 7);
+    let ping_service = PingService::new(app_state.clone(), keep_running.clone(), 10);
+    let recover_service = RecoverService::new(app_state.clone(), keep_running.clone(), 10);
 
     let server_fut = server::start_server(app_state.clone(), shutdown_rx);
     let ping_fut = ping_service.start();
@@ -68,33 +69,6 @@ async fn main() -> std::io::Result<()> {
     // shutdown_tx.send(()).expect("Shutdown server");
     let _ = tokio::try_join!(server_fut, ping_fut, recover_fut);
     Ok(())
-}
-
-#[derive(Serialize, Deserialize)]
-struct RegisterBody {
-    value: i32,
-}
-
-#[derive(Serialize, Deserialize)]
-struct RegisterResponse {
-    monitor: String,
-}
-async fn get_monitor_addr(manager_addr: &str) -> String {
-    let url = format!("{}/register", manager_addr);
-    let rb = RegisterBody { value: 1337 };
-    let response = reqwest::Client::new().post(&url).json(&rb).send().await;
-
-    match response {
-        Ok(r) => {
-            if let reqwest::StatusCode::OK = r.status() {
-                let rr = r.json::<RegisterResponse>().await.unwrap();
-                return rr.monitor;
-            } else {
-                panic!("Problems with server response");
-            }
-        }
-        Err(_err) => panic!("Failed to register!"),
-    }
 }
 
 fn setup_logger() {
@@ -122,9 +96,13 @@ fn setup_logger() {
 }
 
 fn setup_close_handler(keep_running: Arc<AtomicBool>, sender: oneshot::Sender<()>) {
+    let sender_opt = std::sync::Mutex::new(Some(sender));
     ctrlc::set_handler(move || {
         info!("Send signal to terminate.");
         keep_running.swap(false, Ordering::Relaxed);
+        if let Some(tx) = sender_opt.lock().unwrap().take() {
+            tx.send(()).unwrap();
+        }
     })
     .expect("Error setting Ctrl-C handler");
 }

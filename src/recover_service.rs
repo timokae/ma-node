@@ -1,12 +1,11 @@
-use async_trait::async_trait;
 use log::{error, info};
-use std::collections::HashMap;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 use std::time::Duration;
 
 use crate::app_state::AppState;
 use crate::config_store::ConfigStoreFunc;
 use crate::file_store::{FileStoreFunc, RecoverEntry};
+use crate::http_requests::{download_from_node, lookup_hash_on_monitor, LookupMonitorResponse};
 // use crate::service::Service;
 
 pub struct RecoverService {
@@ -18,16 +17,15 @@ pub struct RecoverService {
 impl RecoverService {
     pub async fn start(self) -> std::io::Result<()> {
         tokio::spawn(async move {
+            let monitor_addr = self
+                .app_state
+                .clone()
+                .config_store
+                .read()
+                .unwrap()
+                .monitor();
             info!("Starting recover service");
             loop {
-                let monitor_addr = self
-                    .app_state
-                    .clone()
-                    .config_store
-                    .read()
-                    .unwrap()
-                    .monitor();
-
                 let recover_opt = self
                     .app_state
                     .file_store
@@ -36,7 +34,8 @@ impl RecoverService {
                     .next_file_to_recover();
 
                 if let Some(entry) = recover_opt {
-                    match RecoverService::lookup_hash(&monitor_addr, &entry.hash).await {
+                    info!("Trying to recover {}", entry.hash);
+                    match lookup_hash_on_monitor(&entry.hash, &monitor_addr).await {
                         Ok(result) => {
                             RecoverService::handle_lookup_success(
                                 self.app_state.clone(),
@@ -99,46 +98,28 @@ impl RecoverService {
         }
     }
 
-    async fn lookup_hash(
-        monitor_addr: &str,
-        hash: &str,
-    ) -> Result<HashMap<String, String>, reqwest::Error> {
-        info!("Lookup hash {} on monitor", hash);
-        let url = format!("{}/lookup/{}?forward=true", monitor_addr, hash);
-
-        let response = reqwest::Client::new().get(&url).send().await?;
-
-        match response.error_for_status() {
-            Ok(res) => {
-                let result = res.json::<HashMap<String, String>>().await?;
-                return Ok(result);
-            }
-            Err(err) => Err(err),
-        }
-
-        // Ok(response)
-    }
-
     async fn handle_lookup_success(
         app_state: Arc<AppState>,
         hash: &str,
-        result: HashMap<String, String>,
+        lookup_response: LookupMonitorResponse,
     ) {
-        info!("{:?}", result);
-        let node_addr = result.get("node_addr").unwrap();
+        let node_addr = lookup_response.node_addr;
 
-        match RecoverService::download_from_node(node_addr, hash).await {
+        match download_from_node(&node_addr, hash).await {
             Ok(result) => {
-                let content = result.get("content").unwrap();
-                // let x = &app_state.clone().file_store;
-                // &app_state.clone().insert_new_file(content);
-                // app_state.insert_new_file(content);
                 let hash = app_state
                     .config_store
                     .write()
                     .unwrap()
-                    .hash_content(content);
-                info!("Recovered file {} with hash {}", content, hash)
+                    .hash_content(&result.content);
+
+                app_state
+                    .file_store
+                    .write()
+                    .unwrap()
+                    .insert_file(&hash, &result.content);
+
+                info!("Recovered file {} with hash {}", &result.content, hash)
             }
             Err(err) => error!("{:?}", err),
         }
@@ -161,19 +142,19 @@ impl RecoverService {
         );
     }
 
-    async fn download_from_node(
-        node_addr: &str,
-        hash: &str,
-    ) -> Result<HashMap<String, String>, reqwest::Error> {
-        let url = format!("{}/download/{}", node_addr, hash);
-        let response = reqwest::Client::new().get(&url).send().await?;
+    // async fn download_from_node(
+    //     node_addr: &str,
+    //     hash: &str,
+    // ) -> Result<HashMap<String, String>, reqwest::Error> {
+    //     let url = format!("{}/download/{}", node_addr, hash);
+    //     let response = reqwest::Client::new().get(&url).send().await?;
 
-        match response.error_for_status() {
-            Ok(res) => {
-                let result = res.json::<HashMap<String, String>>().await?;
-                return Ok(result);
-            }
-            Err(err) => Err(err),
-        }
-    }
+    //     match response.error_for_status() {
+    //         Ok(res) => {
+    //             let result = res.json::<HashMap<String, String>>().await?;
+    //             return Ok(result);
+    //         }
+    //         Err(err) => Err(err),
+    //     }
+    // }
 }

@@ -1,20 +1,12 @@
 use chrono::{TimeZone, Utc};
 use log::{error, info};
-use serde::Deserialize;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 use std::time::Duration;
-// use async_trait::async_trait;
 
-use crate::app_state::{AppState, Ping};
+use crate::app_state::AppState;
 use crate::config_store::ConfigStoreFunc;
 use crate::file_store::{FileStoreFunc, RecoverEntry};
-// use crate::service::Service;
-
-#[derive(Deserialize)]
-pub struct PingResponse {
-    status: String,
-    files_to_recover: Vec<String>,
-}
+use crate::http_requests::{ping_monitor, PingResponse};
 
 pub struct PingService {
     pub app_state: Arc<AppState>,
@@ -64,26 +56,13 @@ impl PingService {
         let ping = app_state.generate_ping();
         let monitor_addr = app_state.config_store.read().unwrap().monitor();
 
-        match PingService::send_ping(&ping, &monitor_addr).await {
+        match ping_monitor(&ping, &monitor_addr).await {
             Ok(ping_response) => {
                 PingService::handle_request_success(app_state.clone(), ping_response);
             }
             Err(err) => {
                 PingService::handle_request_error(err);
             }
-        }
-    }
-
-    async fn send_ping(ping: &Ping, monitor_addr: &str) -> Result<PingResponse, reqwest::Error> {
-        let url = format!("{}/ping", monitor_addr);
-        let response = reqwest::Client::new().post(&url).json(ping).send().await?;
-
-        match response.error_for_status() {
-            Ok(res) => {
-                let ping_res = res.json::<PingResponse>().await?;
-                return Ok(ping_res);
-            }
-            Err(err) => Err(err),
         }
     }
 
@@ -98,13 +77,17 @@ impl PingService {
             })
             .collect::<Vec<RecoverEntry>>();
 
+        if entries.len() > 0 {
+            info!("Files to sync {:?}", entries);
+        }
+
         app_state
             .file_store
             .write()
             .unwrap()
             .insert_files_to_recover(entries);
 
-        info!("Ping successfull.")
+        // info!("Ping successfull.")
     }
 
     fn handle_request_error(error: reqwest::Error) {
