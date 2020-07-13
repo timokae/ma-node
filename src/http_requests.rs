@@ -1,20 +1,35 @@
 use crate::app_state::Ping;
 use crate::server::DownloadResponse;
+use crate::stat_store::Stats;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
-struct RegisterRequest {
-    value: i32,
+#[derive(Clone, Serialize, Deserialize)]
+pub struct RegisterRequest {
+    pub region: String,
+    pub uptime: Vec<u32>,
 }
-
+impl RegisterRequest {
+    pub fn from_stats(stats: &Stats) -> RegisterRequest {
+        RegisterRequest {
+            region: stats.region.clone(),
+            uptime: stats.uptime.clone(),
+        }
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub struct RegisterResponse {
     pub monitor: String,
 }
-pub async fn register_on_manager(manager_addr: &str) -> Result<RegisterResponse, reqwest::Error> {
+pub async fn register_on_manager(
+    manager_addr: &str,
+    register_request: RegisterRequest,
+) -> Result<RegisterResponse, reqwest::Error> {
     let url = format!("{}/register", manager_addr);
-    let rb = RegisterRequest { value: 1337 };
-    let response = reqwest::Client::new().post(&url).json(&rb).send().await?;
+    let response = reqwest::Client::new()
+        .post(&url)
+        .json(&register_request)
+        .send()
+        .await?;
 
     match response.error_for_status() {
         Ok(res) => Ok(res.json::<RegisterResponse>().await?),

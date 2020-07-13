@@ -1,9 +1,9 @@
 use serde::Serialize;
 use std::sync::RwLock;
 
-use crate::file_store::{FileStore, FileStoreFunc};
 use crate::config_store::{ConfigStore, ConfigStoreFunc};
-
+use crate::file_store::{FileStore, FileStoreFunc};
+use crate::stat_store::{StatStore, Stats};
 #[derive(Serialize)]
 pub struct Ping {
     pub fingerprint: String,
@@ -15,10 +15,17 @@ pub struct Ping {
 pub struct AppState {
     pub file_store: RwLock<FileStore>,
     pub config_store: RwLock<ConfigStore>,
+    pub stat_store: RwLock<StatStore>,
 }
 
 impl AppState {
-    pub fn new(manager_addr: &str, monitor_addr: &str, port: u16, fingerprint: &str) -> AppState {
+    pub fn new(
+        manager_addr: &str,
+        monitor_addr: &str,
+        port: u16,
+        fingerprint: &str,
+        stats: Stats,
+    ) -> AppState {
         let file_store = RwLock::new(FileStore::new());
         let config_store = RwLock::new(ConfigStore::new(
             manager_addr.clone(),
@@ -26,10 +33,12 @@ impl AppState {
             port.clone(),
             fingerprint.clone(),
         ));
+        let stat_store = RwLock::new(StatStore { stats });
 
         AppState {
             file_store,
             config_store,
+            stat_store,
         }
     }
 

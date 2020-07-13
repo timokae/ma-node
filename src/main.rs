@@ -15,6 +15,7 @@ mod ping_service;
 mod recover_service;
 mod server;
 mod service;
+mod stat_store;
 
 use app_state::AppState;
 use fern::colors::{Color, ColoredLevelConfig};
@@ -36,19 +37,14 @@ async fn main() -> std::io::Result<()> {
     setup_close_handler(keep_running.clone(), shutdown_tx);
 
     let args: Vec<String> = env::args().collect();
-    info!("{:?}", args);
-    if args.len() < 2 {
-        panic!("Not enough arguments")
-    }
     let port: &u16 = &args[1].parse::<u16>().unwrap_or(8080);
-
+    let stats_path: &String = &args[2].parse::<String>().unwrap();
     let manager_addr = String::from("http://localhost:3000");
-    // let monitor_addr = get_monitor_addr(&manager_addr).await;
-    let monitor_addr = register_on_manager(&manager_addr).await.unwrap().monitor;
+    let stats = stat_store::Stats::from_file(stats_path);
 
     let mut rng = rand::thread_rng();
-    // let weight = rng.gen_range(0.0, 1.0);
     let fingerprint = format!("node-{}", rng.gen::<u32>());
+    let monitor_addr = run_registration(&manager_addr, &stats).await;
 
     info!("Assigned to monitor on address {}", monitor_addr);
 
@@ -57,7 +53,13 @@ async fn main() -> std::io::Result<()> {
         &monitor_addr,
         *port,
         &fingerprint,
+        stats,
     ));
+
+    info!(
+        "Region: {}",
+        app_state.stat_store.read().unwrap().stats.region
+    );
 
     let ping_service = PingService::new(app_state.clone(), keep_running.clone(), 10);
     let recover_service = RecoverService::new(app_state.clone(), keep_running.clone(), 10);
@@ -105,4 +107,14 @@ fn setup_close_handler(keep_running: Arc<AtomicBool>, sender: oneshot::Sender<()
         }
     })
     .expect("Error setting Ctrl-C handler");
+}
+
+async fn run_registration(manager_addr: &str, stats: &stat_store::Stats) -> String {
+    let register_request = http_requests::RegisterRequest::from_stats(&stats);
+    let response = register_on_manager(&manager_addr, register_request).await;
+
+    match response {
+        Ok(result) => result.monitor,
+        Err(err) => panic!("{}", err),
+    }
 }
