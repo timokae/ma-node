@@ -59,6 +59,11 @@ impl PingService {
         match ping_monitor(&ping, &monitor_addr).await {
             Ok(ping_response) => {
                 PingService::handle_request_success(app_state.clone(), ping_response);
+                app_state
+                    .file_store
+                    .write()
+                    .unwrap()
+                    .clear_rejected_hashes();
             }
             Err(err) => {
                 PingService::handle_request_error(err);

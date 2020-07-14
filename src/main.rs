@@ -53,6 +53,7 @@ async fn main() -> std::io::Result<()> {
         &monitor_addr,
         *port,
         &fingerprint,
+        stats.capacity,
         stats,
     ));
 

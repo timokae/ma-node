@@ -18,22 +18,30 @@ impl RecoverEntry {
 pub struct FileStore {
     files_to_sync: Vec<RecoverEntry>,
     files: HashMap<String, String>,
+    capacity: usize,
+    rejected_hashes: Vec<String>,
 }
 
 pub trait FileStoreFunc {
-    fn new() -> FileStore;
+    fn new(capacity: usize) -> FileStore;
     fn get_file(&self, hash: &str) -> Option<&String>;
     fn insert_file(&mut self, hash: &str, content: &str);
     fn insert_files_to_recover(&mut self, entries: Vec<RecoverEntry>);
     fn next_file_to_recover(&mut self) -> Option<RecoverEntry>;
     fn hashes(&self) -> Vec<String>;
+    fn capacity_left(&self) -> usize;
+    fn reject_hash(&mut self, hash: &str);
+    fn rejected_hashes(&self) -> Vec<String>;
+    fn clear_rejected_hashes(&mut self);
 }
 
 impl FileStoreFunc for FileStore {
-    fn new() -> FileStore {
+    fn new(capacity: usize) -> FileStore {
         FileStore {
             files_to_sync: vec![],
             files: HashMap::new(),
+            capacity,
+            rejected_hashes: vec![],
         }
     }
 
@@ -66,5 +74,21 @@ impl FileStoreFunc for FileStore {
             .keys()
             .map(|key| String::from(key.clone()))
             .collect()
+    }
+
+    fn capacity_left(&self) -> usize {
+        self.capacity - self.files.len() - self.files_to_sync.len()
+    }
+
+    fn reject_hash(&mut self, hash: &str) {
+        self.rejected_hashes.push(String::from(hash));
+    }
+
+    fn rejected_hashes(&self) -> Vec<String> {
+        self.rejected_hashes.clone()
+    }
+
+    fn clear_rejected_hashes(&mut self) {
+        self.rejected_hashes.clear();
     }
 }

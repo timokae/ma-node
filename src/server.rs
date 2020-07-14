@@ -101,6 +101,15 @@ async fn upload(
     upload_request: UploadRequest,
     state: Arc<AppState>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
+    if state.file_store.read().unwrap().capacity_left() <= 0 {
+        let empty_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let reply = warp::reply::json(&empty_map);
+        return Ok(warp::reply::with_status(
+            reply,
+            warp::http::StatusCode::CONFLICT,
+        ));
+    }
+
     let content = upload_request.content.clone();
     let hash = state.config_store.write().unwrap().hash_content(&content);
     state
@@ -110,7 +119,8 @@ async fn upload(
         .insert_file(&hash, &content);
 
     let response = UploadResponse { hash, content };
-    Ok(warp::reply::json(&response))
+    let reply = warp::reply::json(&response);
+    Ok(warp::reply::with_status(reply, warp::http::StatusCode::OK))
 }
 
 #[derive(Serialize)]

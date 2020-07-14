@@ -35,22 +35,33 @@ impl RecoverService {
 
                 if let Some(entry) = recover_opt {
                     info!("Trying to recover {}", entry.hash);
-                    match lookup_hash_on_monitor(&entry.hash, &monitor_addr).await {
-                        Ok(result) => {
-                            RecoverService::handle_lookup_success(
-                                self.app_state.clone(),
-                                &entry.hash,
-                                result,
-                            )
-                            .await
-                        }
-                        Err(err) => {
-                            RecoverService::handle_lookup_fail(
-                                self.app_state.clone(),
-                                &entry.hash,
-                                err,
-                            )
-                            .await
+
+                    if self.app_state.file_store.read().unwrap().capacity_left() <= 0 {
+                        self.app_state
+                            .file_store
+                            .write()
+                            .unwrap()
+                            .reject_hash(&entry.hash);
+
+                        info!("Rejected hash {}", &entry.hash)
+                    } else {
+                        match lookup_hash_on_monitor(&entry.hash, &monitor_addr).await {
+                            Ok(result) => {
+                                RecoverService::handle_lookup_success(
+                                    self.app_state.clone(),
+                                    &entry.hash,
+                                    result,
+                                )
+                                .await
+                            }
+                            Err(err) => {
+                                RecoverService::handle_lookup_fail(
+                                    self.app_state.clone(),
+                                    &entry.hash,
+                                    err,
+                                )
+                                .await
+                            }
                         }
                     }
                 }
@@ -107,11 +118,11 @@ impl RecoverService {
 
         match download_from_node(&node_addr, hash).await {
             Ok(result) => {
-                let hash = app_state
-                    .config_store
-                    .write()
-                    .unwrap()
-                    .hash_content(&result.content);
+                // let hash = app_state
+                //     .config_store
+                //     .write()
+                //     .unwrap()
+                //     .hash_content(&result.content);
 
                 app_state
                     .file_store

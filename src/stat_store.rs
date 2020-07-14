@@ -3,6 +3,7 @@ use serde::Deserialize;
 pub struct Stats {
     pub region: String,
     pub uptime: Vec<u32>,
+    pub capacity: usize,
 }
 
 #[derive(Deserialize)]
