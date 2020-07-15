@@ -12,7 +12,7 @@ impl RegisterRequest {
     pub fn from_stats(stats: &Stats) -> RegisterRequest {
         RegisterRequest {
             region: stats.region.clone(),
-            uptime: stats.uptime.clone(),
+            uptime: stats.uptime.value.clone(),
         }
     }
 }
@@ -24,7 +24,7 @@ pub async fn register_on_manager(
     manager_addr: &str,
     register_request: RegisterRequest,
 ) -> Result<RegisterResponse, reqwest::Error> {
-    let url = format!("{}/register", manager_addr);
+    let url = format!("{}/register/node", manager_addr);
     let response = reqwest::Client::new()
         .post(&url)
         .json(&register_request)

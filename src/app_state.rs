@@ -3,7 +3,7 @@ use std::sync::RwLock;
 
 use crate::config_store::{ConfigStore, ConfigStoreFunc};
 use crate::file_store::{FileStore, FileStoreFunc};
-use crate::stat_store::{StatStore, Stats};
+use crate::stat_store::{StatStore, StatStoreFunc, Stats};
 #[derive(Serialize)]
 pub struct Ping {
     pub fingerprint: String,
@@ -11,7 +11,7 @@ pub struct Ping {
     pub weight: f32,
     pub files: Vec<String>,
     pub rejected_hashes: Vec<String>,
-    pub capacity_left: usize,
+    pub capacity_left: u32,
 }
 
 pub struct AppState {
@@ -26,10 +26,9 @@ impl AppState {
         monitor_addr: &str,
         port: u16,
         fingerprint: &str,
-        capacity: usize,
         stats: Stats,
     ) -> AppState {
-        let file_store = RwLock::new(FileStore::new(capacity));
+        let file_store = RwLock::new(FileStore::new(stats.capacity.value));
         let config_store = RwLock::new(ConfigStore::new(
             manager_addr.clone(),
             monitor_addr.clone(),
@@ -63,6 +62,7 @@ impl AppState {
     }
 
     fn calculate_weight(&self) -> f32 {
-        0.5
+        let usage = self.file_store.read().unwrap().capacity_left();
+        self.stat_store.read().unwrap().total_rating(usage)
     }
 }

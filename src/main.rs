@@ -8,6 +8,7 @@ extern crate serde;
 
 mod app_state;
 mod availability_actor;
+mod config;
 mod config_store;
 mod file_store;
 mod http_requests;
@@ -37,24 +38,22 @@ async fn main() -> std::io::Result<()> {
     setup_close_handler(keep_running.clone(), shutdown_tx);
 
     let args: Vec<String> = env::args().collect();
-    let port: &u16 = &args[1].parse::<u16>().unwrap_or(8080);
-    let stats_path: &String = &args[2].parse::<String>().unwrap();
-    let manager_addr = String::from("http://localhost:3000");
-    let stats = stat_store::Stats::from_file(stats_path);
+    let config_path: &String = &args[1].parse::<String>().unwrap();
+    let config_from_file = config::parse_config(config_path);
 
     let mut rng = rand::thread_rng();
     let fingerprint = format!("node-{}", rng.gen::<u32>());
-    let monitor_addr = run_registration(&manager_addr, &stats).await;
+    let monitor_addr =
+        run_registration(&config_from_file.manager_addr, &config_from_file.stats).await;
 
     info!("Assigned to monitor on address {}", monitor_addr);
 
     let app_state = Arc::new(AppState::new(
-        &manager_addr,
+        &config_from_file.manager_addr,
         &monitor_addr,
-        *port,
+        config_from_file.port,
         &fingerprint,
-        stats.capacity,
-        stats,
+        config_from_file.stats,
     ));
 
     info!(
