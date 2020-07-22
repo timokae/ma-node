@@ -1,6 +1,6 @@
 use chrono::{TimeZone, Utc};
 use log::{error, info};
-use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
+use std::sync::{atomic::Ordering, Arc};
 use std::time::Duration;
 
 use crate::app_state::AppState;
@@ -10,7 +10,6 @@ use crate::http_requests::{ping_monitor, PingResponse};
 
 pub struct PingService {
     pub app_state: Arc<AppState>,
-    pub keep_running: Arc<AtomicBool>,
     pub timeout: u64,
 }
 
@@ -18,12 +17,26 @@ impl PingService {
     pub async fn start(self) -> std::io::Result<()> {
         tokio::spawn(async move {
             info!("Starting ping service.");
-            loop {
-                let _ = PingService::ping_monitor(self.app_state.clone()).await;
+            let mut last_ping = std::time::Instant::now();
+            let stop_services = self.app_state.stop_services.clone();
+            let force_ping = self.app_state.force_ping.clone();
 
-                if self.keep_running.load(Ordering::Relaxed) {
-                    std::thread::sleep(Duration::from_secs(self.timeout));
+            loop {
+                if force_ping.load(Ordering::Relaxed)
+                    || last_ping.elapsed().as_secs() > self.timeout
+                {
+                    if force_ping.load(Ordering::Relaxed) {
+                        info!("Forced ping");
+                    }
+                    let _ = PingService::ping_monitor(self.app_state.clone()).await;
+
+                    force_ping.swap(false, Ordering::Relaxed);
+                    last_ping = std::time::Instant::now();
                 } else {
+                    std::thread::sleep(Duration::from_secs(1));
+                }
+
+                if stop_services.load(Ordering::Relaxed) {
                     info!("Shutting down ping service");
                     break;
                 }
@@ -40,16 +53,8 @@ impl PingService {
     //     let _ = PingService::ping_monitor(self.app_state.clone()).await;
     // }
 
-    pub fn new(
-        app_state: Arc<AppState>,
-        keep_running: Arc<AtomicBool>,
-        timeout: u64,
-    ) -> PingService {
-        PingService {
-            app_state,
-            keep_running,
-            timeout,
-        }
+    pub fn new(app_state: Arc<AppState>, timeout: u64) -> PingService {
+        PingService { app_state, timeout }
     }
 
     async fn ping_monitor(app_state: Arc<AppState>) {

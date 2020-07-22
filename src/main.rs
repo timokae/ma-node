@@ -7,7 +7,6 @@ extern crate rusqlite;
 extern crate serde;
 
 mod app_state;
-mod availability_actor;
 mod config;
 mod config_store;
 mod file_store;
@@ -19,6 +18,7 @@ mod service;
 mod stat_store;
 
 use app_state::AppState;
+use config_store::ConfigStoreFunc;
 use fern::colors::{Color, ColoredLevelConfig};
 use http_requests::register_on_manager;
 use log::info;
@@ -34,8 +34,8 @@ async fn main() -> std::io::Result<()> {
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     setup_logger();
 
-    let keep_running: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
-    setup_close_handler(keep_running.clone(), shutdown_tx);
+    let stop_services: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+    setup_close_handler(stop_services.clone(), shutdown_tx);
 
     let args: Vec<String> = env::args().collect();
     let config_path: &String = &args[1].parse::<String>().unwrap();
@@ -46,6 +46,8 @@ async fn main() -> std::io::Result<()> {
     let monitor_addr =
         run_registration(&config_from_file.manager_addr, &config_from_file.stats).await;
 
+    let force_ping = Arc::new(AtomicBool::new(true));
+
     info!("Assigned to monitor on address {}", monitor_addr);
 
     let app_state = Arc::new(AppState::new(
@@ -54,6 +56,8 @@ async fn main() -> std::io::Result<()> {
         config_from_file.port,
         &fingerprint,
         config_from_file.stats,
+        stop_services.clone(),
+        force_ping.clone(),
     ));
 
     info!(
@@ -61,8 +65,8 @@ async fn main() -> std::io::Result<()> {
         app_state.stat_store.read().unwrap().stats.region
     );
 
-    let ping_service = PingService::new(app_state.clone(), keep_running.clone(), 10);
-    let recover_service = RecoverService::new(app_state.clone(), keep_running.clone(), 10);
+    let ping_service = PingService::new(app_state.clone(), 30);
+    let recover_service = RecoverService::new(app_state.clone(), 10);
 
     let server_fut = server::start_server(app_state.clone(), shutdown_rx);
     let ping_fut = ping_service.start();
@@ -70,6 +74,11 @@ async fn main() -> std::io::Result<()> {
     info!("Services started");
     // shutdown_tx.send(()).expect("Shutdown server");
     let _ = tokio::try_join!(server_fut, ping_fut, recover_fut);
+
+    info!("Sending shutdown signal");
+    let fingerprint = app_state.config_store.read().unwrap().fingerprint();
+    let _ = http_requests::notify_monitor_about_shutdown(&fingerprint, &monitor_addr).await;
+
     Ok(())
 }
 
@@ -101,7 +110,7 @@ fn setup_close_handler(keep_running: Arc<AtomicBool>, sender: oneshot::Sender<()
     let sender_opt = std::sync::Mutex::new(Some(sender));
     ctrlc::set_handler(move || {
         info!("Send signal to terminate.");
-        keep_running.swap(false, Ordering::Relaxed);
+        keep_running.swap(true, Ordering::Relaxed);
         if let Some(tx) = sender_opt.lock().unwrap().take() {
             tx.send(()).unwrap();
         }

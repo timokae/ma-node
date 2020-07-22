@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::sync::RwLock;
+use std::sync::{atomic::AtomicBool, Arc, RwLock};
 
 use crate::config_store::{ConfigStore, ConfigStoreFunc};
 use crate::file_store::{FileStore, FileStoreFunc};
@@ -18,6 +18,8 @@ pub struct AppState {
     pub file_store: RwLock<FileStore>,
     pub config_store: RwLock<ConfigStore>,
     pub stat_store: RwLock<StatStore>,
+    pub stop_services: Arc<AtomicBool>,
+    pub force_ping: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -27,6 +29,8 @@ impl AppState {
         port: u16,
         fingerprint: &str,
         stats: Stats,
+        stop_services: Arc<AtomicBool>,
+        force_ping: Arc<AtomicBool>,
     ) -> AppState {
         let file_store = RwLock::new(FileStore::new(stats.capacity.value));
         let config_store = RwLock::new(ConfigStore::new(
@@ -41,6 +45,8 @@ impl AppState {
             file_store,
             config_store,
             stat_store,
+            stop_services,
+            force_ping,
         }
     }
 

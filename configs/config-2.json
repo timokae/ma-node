@@ -1,10 +1,10 @@
 {
-  "port": 8080,
+  "port": 8082,
   "manager_addr": "http://localhost:3000",
   "stats": {
-    "region": "asia",
+    "region": "europe",
     "uptime": {
-      "value": [8, 17],
+      "value": [8, 15],
       "weight": 0.6
     },
     "capacity": {

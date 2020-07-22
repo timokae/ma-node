@@ -1,5 +1,5 @@
 use log::{error, info};
-use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
+use std::sync::{atomic::Ordering, Arc};
 use std::time::Duration;
 
 use crate::app_state::AppState;
@@ -10,7 +10,6 @@ use crate::http_requests::{download_from_node, lookup_hash_on_monitor, LookupMon
 
 pub struct RecoverService {
     pub app_state: Arc<AppState>,
-    pub keep_running: Arc<AtomicBool>,
     pub timeout: u64,
 }
 
@@ -25,6 +24,9 @@ impl RecoverService {
                 .unwrap()
                 .monitor();
             info!("Starting recover service");
+
+            let stop_services = self.app_state.stop_services.clone();
+
             loop {
                 let recover_opt = self
                     .app_state
@@ -64,11 +66,11 @@ impl RecoverService {
                             }
                         }
                     }
+                } else {
+                    std::thread::sleep(Duration::from_secs(self.timeout));
                 }
 
-                if self.keep_running.load(Ordering::Relaxed) {
-                    std::thread::sleep(Duration::from_secs(self.timeout));
-                } else {
+                if stop_services.load(Ordering::Relaxed) {
                     info!("Shutting down recover service");
                     break;
                 }
@@ -82,31 +84,8 @@ impl RecoverService {
         Ok(())
     }
 
-    // async fn perform(self) {
-    //     let monitor_addr = self.app_state.clone().config_store.read().unwrap().monitor();
-    //     let recover_opt = self.app_state.file_store.write().unwrap().next_file_to_recover();
-    //     if let Some(entry) = recover_opt {
-    //         match RecoverService::lookup_hash(&monitor_addr, &entry.hash).await {
-    //             Ok(result) => {
-    //                 RecoverService::handle_lookup_success(self.app_state.clone(), &entry.hash, result).await
-    //             }
-    //             Err(err) => RecoverService::handle_lookup_fail(self.app_state.clone(), &entry.hash, err).await,
-    //         }
-    //     } else {
-    //         std::thread::sleep(std::time::Duration::from_secs(self.timeout));
-    //     }
-    // }
-
-    pub fn new(
-        app_state: Arc<AppState>,
-        keep_running: Arc<AtomicBool>,
-        timeout: u64,
-    ) -> RecoverService {
-        RecoverService {
-            app_state,
-            keep_running,
-            timeout,
-        }
+    pub fn new(app_state: Arc<AppState>, timeout: u64) -> RecoverService {
+        RecoverService { app_state, timeout }
     }
 
     async fn handle_lookup_success(
@@ -130,6 +109,8 @@ impl RecoverService {
                     .unwrap()
                     .insert_file(&hash, &result.content);
 
+                app_state.force_ping.swap(true, Ordering::Relaxed);
+
                 info!("Recovered file {} with hash {}", &result.content, hash)
             }
             Err(err) => error!("{:?}", err),
@@ -152,20 +133,4 @@ impl RecoverService {
             hash, error
         );
     }
-
-    // async fn download_from_node(
-    //     node_addr: &str,
-    //     hash: &str,
-    // ) -> Result<HashMap<String, String>, reqwest::Error> {
-    //     let url = format!("{}/download/{}", node_addr, hash);
-    //     let response = reqwest::Client::new().get(&url).send().await?;
-
-    //     match response.error_for_status() {
-    //         Ok(res) => {
-    //             let result = res.json::<HashMap<String, String>>().await?;
-    //             return Ok(result);
-    //         }
-    //         Err(err) => Err(err),
-    //     }
-    // }
 }

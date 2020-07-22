@@ -1,5 +1,4 @@
 use chrono::{Datelike, Local, TimeZone};
-use log::error;
 use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct Stat<T> {

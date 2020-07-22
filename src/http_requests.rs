@@ -99,3 +99,18 @@ pub async fn download_from_node(
         Err(err) => Err(err),
     }
 }
+
+pub async fn notify_monitor_about_shutdown(
+    fingerprint: &str,
+    monitor_addr: &str,
+) -> Result<(), reqwest::Error> {
+    let url = format!("{}/shutdown/{}", monitor_addr, fingerprint);
+    let response = reqwest::Client::new().get(&url).send().await?;
+
+    match response.error_for_status() {
+        Ok(_res) => {
+            return Ok(());
+        }
+        Err(err) => Err(err),
+    }
+}
