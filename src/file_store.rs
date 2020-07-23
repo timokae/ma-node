@@ -1,4 +1,7 @@
+use log::info;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{Read, Write};
 
 #[derive(Debug)]
 pub struct RecoverEntry {
@@ -23,9 +26,10 @@ pub struct FileStore {
 }
 
 pub trait FileStoreFunc {
-    fn new(capacity: u32) -> FileStore;
+    fn new(capacity: u32, path: &str) -> FileStore;
     fn get_file(&self, hash: &str) -> Option<&String>;
     fn insert_file(&mut self, hash: &str, content: &str);
+    fn remove_file(&mut self, hash: &str);
     fn insert_files_to_recover(&mut self, entries: Vec<RecoverEntry>);
     fn next_file_to_recover(&mut self) -> Option<RecoverEntry>;
     fn hashes(&self) -> Vec<String>;
@@ -33,13 +37,18 @@ pub trait FileStoreFunc {
     fn reject_hash(&mut self, hash: &str);
     fn rejected_hashes(&self) -> Vec<String>;
     fn clear_rejected_hashes(&mut self);
+    fn save_files(&self, name: &str);
+    fn restore_files(path: &str) -> HashMap<String, String>;
 }
 
 impl FileStoreFunc for FileStore {
-    fn new(capacity: u32) -> FileStore {
+    fn new(capacity: u32, path: &str) -> FileStore {
+        let files = FileStore::restore_files(path);
+        info!("FileStore initialized: {:?}", files);
+
         FileStore {
             files_to_sync: vec![],
-            files: HashMap::new(),
+            files,
             capacity,
             rejected_hashes: vec![],
         }
@@ -52,6 +61,11 @@ impl FileStoreFunc for FileStore {
     fn insert_file(&mut self, hash: &str, content: &str) {
         self.files.insert(String::from(hash), String::from(content));
         println!("{:?}", self.files);
+    }
+
+    fn remove_file(&mut self, hash: &str) {
+        info!("Removing {}", hash);
+        self.files.remove(hash);
     }
 
     fn insert_files_to_recover(&mut self, entries: Vec<RecoverEntry>) {
@@ -92,5 +106,33 @@ impl FileStoreFunc for FileStore {
 
     fn clear_rejected_hashes(&mut self) {
         self.rejected_hashes.clear();
+    }
+
+    fn save_files(&self, path: &str) {
+        let serialized = serde_json::to_string(&self.files).unwrap();
+        let mut file = File::create(path).unwrap();
+        let _ = file.write_all(serialized.as_bytes());
+    }
+
+    fn restore_files(path: &str) -> HashMap<String, String> {
+        // let mut file = File::open(path)?;
+        info!("{}", path);
+        let result = File::open(path)
+            .and_then(|mut file| {
+                let mut contents = String::new();
+                let _ = file.read_to_string(&mut contents);
+                info!("{:?}", contents);
+                Ok(contents)
+            })
+            .and_then(|content| {
+                let files: HashMap<String, String> = serde_json::from_str(&content).unwrap();
+                info!("{:?}", files);
+                Ok(files)
+            });
+
+        match result {
+            Ok(files) => files,
+            Err(_err) => HashMap::new(),
+        }
     }
 }

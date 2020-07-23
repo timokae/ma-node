@@ -70,6 +70,7 @@ pub async fn lookup_hash_on_monitor(
 pub struct PingResponse {
     pub status: String,
     pub files_to_recover: Vec<String>,
+    pub files_to_delete: Vec<String>,
 }
 pub async fn ping_monitor(ping: &Ping, monitor_addr: &str) -> Result<PingResponse, reqwest::Error> {
     let url = format!("{}/ping", monitor_addr);

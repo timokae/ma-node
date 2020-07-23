@@ -35,7 +35,7 @@ pub async fn start_server(
         .and_then(upload);
 
     let lookup_hash = warp::get()
-        .and(warp::path("download"))
+        .and(warp::path("lookup"))
         .and(warp::path::param::<String>())
         .and(state_filter.clone())
         .and_then(lookup);

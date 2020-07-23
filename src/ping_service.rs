@@ -25,9 +25,6 @@ impl PingService {
                 if force_ping.load(Ordering::Relaxed)
                     || last_ping.elapsed().as_secs() > self.timeout
                 {
-                    if force_ping.load(Ordering::Relaxed) {
-                        info!("Forced ping");
-                    }
                     let _ = PingService::ping_monitor(self.app_state.clone()).await;
 
                     force_ping.swap(false, Ordering::Relaxed);
@@ -64,6 +61,7 @@ impl PingService {
         match ping_monitor(&ping, &monitor_addr).await {
             Ok(ping_response) => {
                 PingService::handle_request_success(app_state.clone(), ping_response);
+
                 app_state
                     .file_store
                     .write()
@@ -96,6 +94,11 @@ impl PingService {
             .write()
             .unwrap()
             .insert_files_to_recover(entries);
+
+        ping_response
+            .files_to_delete
+            .iter()
+            .for_each(|hash| app_state.file_store.write().unwrap().remove_file(hash));
 
         // info!("Ping successfull.")
     }

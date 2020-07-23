@@ -1,9 +1,10 @@
 use serde::Serialize;
 use std::sync::{atomic::AtomicBool, Arc, RwLock};
 
+use crate::config::ConfigFromFile;
 use crate::config_store::{ConfigStore, ConfigStoreFunc};
 use crate::file_store::{FileStore, FileStoreFunc};
-use crate::stat_store::{StatStore, StatStoreFunc, Stats};
+use crate::stat_store::{StatStore, StatStoreFunc};
 #[derive(Serialize)]
 pub struct Ping {
     pub fingerprint: String,
@@ -24,22 +25,23 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
-        manager_addr: &str,
+        config: ConfigFromFile,
         monitor_addr: &str,
-        port: u16,
-        fingerprint: &str,
-        stats: Stats,
         stop_services: Arc<AtomicBool>,
         force_ping: Arc<AtomicBool>,
     ) -> AppState {
-        let file_store = RwLock::new(FileStore::new(stats.capacity.value));
+        let path = format!("files/{}.json", &config.fingerprint);
+
+        let file_store = RwLock::new(FileStore::new(config.stats.capacity.value, &path));
         let config_store = RwLock::new(ConfigStore::new(
-            manager_addr.clone(),
+            &config.manager_addr,
             monitor_addr.clone(),
-            port.clone(),
-            fingerprint.clone(),
+            config.port,
+            &config.fingerprint,
         ));
-        let stat_store = RwLock::new(StatStore { stats });
+        let stat_store = RwLock::new(StatStore {
+            stats: config.stats,
+        });
 
         AppState {
             file_store,
@@ -70,5 +72,11 @@ impl AppState {
     fn calculate_weight(&self) -> f32 {
         let usage = self.file_store.read().unwrap().capacity_left();
         self.stat_store.read().unwrap().total_rating(usage)
+    }
+
+    pub fn write_to_disk(&self) {
+        let fingerprint = self.config_store.read().unwrap().fingerprint();
+        let path = format!("files/{}.json", fingerprint);
+        let _ = self.file_store.read().unwrap().save_files(&path);
     }
 }

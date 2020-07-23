@@ -23,7 +23,6 @@ use fern::colors::{Color, ColoredLevelConfig};
 use http_requests::register_on_manager;
 use log::info;
 use ping_service::PingService;
-use rand::Rng;
 use recover_service::RecoverService;
 use std::env;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
@@ -40,9 +39,6 @@ async fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let config_path: &String = &args[1].parse::<String>().unwrap();
     let config_from_file = config::parse_config(config_path);
-
-    let mut rng = rand::thread_rng();
-    let fingerprint = format!("node-{}", rng.gen::<u32>());
     let monitor_addr =
         run_registration(&config_from_file.manager_addr, &config_from_file.stats).await;
 
@@ -51,11 +47,8 @@ async fn main() -> std::io::Result<()> {
     info!("Assigned to monitor on address {}", monitor_addr);
 
     let app_state = Arc::new(AppState::new(
-        &config_from_file.manager_addr,
+        config_from_file,
         &monitor_addr,
-        config_from_file.port,
-        &fingerprint,
-        config_from_file.stats,
         stop_services.clone(),
         force_ping.clone(),
     ));
@@ -78,6 +71,8 @@ async fn main() -> std::io::Result<()> {
     info!("Sending shutdown signal");
     let fingerprint = app_state.config_store.read().unwrap().fingerprint();
     let _ = http_requests::notify_monitor_about_shutdown(&fingerprint, &monitor_addr).await;
+
+    app_state.write_to_disk();
 
     Ok(())
 }

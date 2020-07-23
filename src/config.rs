@@ -3,6 +3,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct ConfigFromFile {
+    pub fingerprint: String,
     pub port: u16,
     pub manager_addr: String,
     pub stats: Stats,
