@@ -1,4 +1,5 @@
 {
+  "fingerprint": "node-8081",
   "port": 8081,
   "manager_addr": "http://localhost:3000",
   "stats": {
