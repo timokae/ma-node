@@ -1,4 +1,5 @@
 extern crate async_trait;
+extern crate crypto;
 extern crate ctrlc;
 extern crate fern;
 extern crate futures;

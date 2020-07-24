@@ -97,20 +97,7 @@ impl RecoverService {
 
         match download_from_node(&node_addr, hash).await {
             Ok(result) => {
-                // let hash = app_state
-                //     .config_store
-                //     .write()
-                //     .unwrap()
-                //     .hash_content(&result.content);
-
-                app_state
-                    .file_store
-                    .write()
-                    .unwrap()
-                    .insert_file(&hash, &result.content);
-
-                app_state.force_ping.swap(true, Ordering::Relaxed);
-
+                let hash = app_state.add_new_file(&result.content);
                 info!("Recovered file {} with hash {}", &result.content, hash)
             }
             Err(err) => error!("{:?}", err),

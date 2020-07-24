@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::sync::{atomic::AtomicBool, Arc, RwLock};
+use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc, RwLock};
 
 use crate::config::ConfigFromFile;
 use crate::config_store::{ConfigStore, ConfigStoreFunc};
@@ -13,6 +13,7 @@ pub struct Ping {
     pub files: Vec<String>,
     pub rejected_hashes: Vec<String>,
     pub capacity_left: u32,
+    pub uploaded_hashes: Vec<String>,
 }
 
 pub struct AppState {
@@ -64,19 +65,39 @@ impl AppState {
             files: self.file_store.read().unwrap().hashes(),
             capacity_left,
             rejected_hashes: self.file_store.read().unwrap().rejected_hashes(),
+            uploaded_hashes: self.file_store.read().unwrap().uploaded_hashes(),
         };
+
+        self.file_store.write().unwrap().clear_uploaded_hashes();
 
         return ping;
     }
 
-    fn calculate_weight(&self) -> f32 {
-        let usage = self.file_store.read().unwrap().capacity_left();
-        self.stat_store.read().unwrap().total_rating(usage)
+    pub fn add_new_file(&self, content: &str) -> String {
+        let hash = self.config_store.write().unwrap().hash_content(&content);
+        self.file_store
+            .write()
+            .unwrap()
+            .insert_file(&hash, &content);
+
+        self.file_store
+            .write()
+            .unwrap()
+            .add_hash_to_uploaded_hashes(&hash);
+
+        self.force_ping.swap(true, Ordering::Relaxed);
+
+        return hash;
     }
 
     pub fn write_to_disk(&self) {
         let fingerprint = self.config_store.read().unwrap().fingerprint();
         let path = format!("files/{}.json", fingerprint);
         let _ = self.file_store.read().unwrap().save_files(&path);
+    }
+
+    fn calculate_weight(&self) -> f32 {
+        let usage = self.file_store.read().unwrap().capacity_left();
+        self.stat_store.read().unwrap().total_rating(usage)
     }
 }

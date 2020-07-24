@@ -23,6 +23,7 @@ pub struct FileStore {
     files: HashMap<String, String>,
     capacity: u32,
     rejected_hashes: Vec<String>,
+    new_hashes: Vec<String>,
 }
 
 pub trait FileStoreFunc {
@@ -39,6 +40,9 @@ pub trait FileStoreFunc {
     fn clear_rejected_hashes(&mut self);
     fn save_files(&self, name: &str);
     fn restore_files(path: &str) -> HashMap<String, String>;
+    fn uploaded_hashes(&self) -> Vec<String>;
+    fn add_hash_to_uploaded_hashes(&mut self, hash: &str);
+    fn clear_uploaded_hashes(&mut self);
 }
 
 impl FileStoreFunc for FileStore {
@@ -51,6 +55,7 @@ impl FileStoreFunc for FileStore {
             files,
             capacity,
             rejected_hashes: vec![],
+            new_hashes: vec![],
         }
     }
 
@@ -134,5 +139,17 @@ impl FileStoreFunc for FileStore {
             Ok(files) => files,
             Err(_err) => HashMap::new(),
         }
+    }
+
+    fn uploaded_hashes(&self) -> Vec<String> {
+        self.new_hashes.clone()
+    }
+
+    fn add_hash_to_uploaded_hashes(&mut self, hash: &str) {
+        self.new_hashes.push(String::from(hash));
+    }
+
+    fn clear_uploaded_hashes(&mut self) {
+        self.new_hashes.clear();
     }
 }

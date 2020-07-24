@@ -1,6 +1,6 @@
 use log::{error, info};
 use serde::{Deserialize, Serialize};
-use std::sync::{atomic::Ordering, Arc};
+use std::sync::Arc;
 use tokio::sync::oneshot;
 use warp::Filter;
 
@@ -111,14 +111,7 @@ async fn upload(
     }
 
     let content = upload_request.content.clone();
-    let hash = state.config_store.write().unwrap().hash_content(&content);
-    state
-        .file_store
-        .write()
-        .unwrap()
-        .insert_file(&hash, &content);
-
-    state.force_ping.swap(true, Ordering::Relaxed);
+    let hash = state.add_new_file(&content);
 
     let response = UploadResponse { hash, content };
     let reply = warp::reply::json(&response);
