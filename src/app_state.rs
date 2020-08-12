@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc, RwLock};
 
 use crate::config::ConfigFromFile;
-use crate::config_store::{ConfigStore, ConfigStoreFunc};
+use crate::config_store::{ConfigStore, ConfigStoreFunc, Monitor};
 use crate::file_store::{FileStore, FileStoreFunc};
 use crate::stat_store::{StatStore, StatStoreFunc};
 #[derive(Serialize)]
@@ -28,15 +28,17 @@ impl AppState {
     pub fn new(
         config: ConfigFromFile,
         monitor_addr: &str,
+        monitors: Vec<Monitor>,
         stop_services: Arc<AtomicBool>,
         force_ping: Arc<AtomicBool>,
     ) -> AppState {
-        let path = format!("files/{}.json", &config.fingerprint);
+        let path = format!("./files/{}", &config.fingerprint);
 
         let file_store = RwLock::new(FileStore::new(config.stats.capacity.value, &path));
         let config_store = RwLock::new(ConfigStore::new(
             &config.manager_addr,
             monitor_addr.clone(),
+            monitors,
             config.port,
             &config.fingerprint,
         ));
@@ -62,7 +64,7 @@ impl AppState {
             fingerprint: config.fingerprint(),
             port: config.port(),
             weight: self.calculate_weight(),
-            files: self.file_store.read().unwrap().hashes(),
+            files: self.file_store.read().unwrap().hashes().unwrap(),
             capacity_left,
             rejected_hashes: self.file_store.read().unwrap().rejected_hashes(),
             uploaded_hashes: self.file_store.read().unwrap().uploaded_hashes(),
@@ -73,17 +75,26 @@ impl AppState {
         return ping;
     }
 
-    pub fn add_new_file(&self, content: &str) -> String {
-        let hash = self.config_store.write().unwrap().hash_content(&content);
+    pub fn add_new_file(&self, content: &[u8], distribute: bool) -> String {
+        let hash = self.config_store.write().unwrap().hash_content(content);
+        let fingerprint = self.config_store.read().unwrap().fingerprint();
+
         self.file_store
             .write()
             .unwrap()
-            .insert_file(&hash, &content);
+            .save_file(&fingerprint, &hash, &content);
 
         self.file_store
             .write()
             .unwrap()
             .add_hash_to_uploaded_hashes(&hash);
+
+        if distribute {
+            self.file_store
+                .write()
+                .unwrap()
+                .insert_file_to_distribute(&hash);
+        }
 
         self.force_ping.swap(true, Ordering::Relaxed);
 

@@ -97,8 +97,10 @@ impl RecoverService {
 
         match download_from_node(&node_addr, hash).await {
             Ok(result) => {
-                let hash = app_state.add_new_file(&result.content);
-                info!("Recovered file {} with hash {}", &result.content, hash)
+                app_state.add_new_file(result.content.as_bytes(), false);
+                info!("Recovered file with hash {}", hash);
+                // let hash = app_state.add_new_file(&result.content, false);
+                // info!("Recovered file {} with hash {}", &result.content, hash)
             }
             Err(err) => error!("{:?}", err),
         }

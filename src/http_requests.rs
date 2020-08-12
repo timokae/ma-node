@@ -1,4 +1,5 @@
 use crate::app_state::Ping;
+use crate::config_store::Monitor;
 use crate::server::DownloadResponse;
 use crate::stat_store::Stats;
 use serde::{Deserialize, Serialize};
@@ -16,9 +17,10 @@ impl RegisterRequest {
         }
     }
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct RegisterResponse {
-    pub monitor: String,
+    pub monitor_addr: String,
+    pub monitors: Vec<Monitor>,
 }
 pub async fn register_on_manager(
     manager_addr: &str,
@@ -94,8 +96,14 @@ pub async fn download_from_node(
 
     match response.error_for_status() {
         Ok(res) => {
-            let result = res.json::<DownloadResponse>().await?;
-            return Ok(result);
+            // let result = res.json::<DownloadResponse>().await?;
+            // return Ok(result);
+            let content = res.text().await?;
+
+            Ok(DownloadResponse {
+                hash: String::from(hash),
+                content,
+            })
         }
         Err(err) => Err(err),
     }
@@ -112,6 +120,16 @@ pub async fn notify_monitor_about_shutdown(
         Ok(_res) => {
             return Ok(());
         }
+        Err(err) => Err(err),
+    }
+}
+
+pub async fn distribute_to_monitor(hash: &str, monitor_addr: &str) -> Result<(), reqwest::Error> {
+    let url = format!("{}/distribute/{}?forward=false", monitor_addr, hash);
+    let response = reqwest::Client::new().post(&url).send().await?;
+
+    match response.error_for_status() {
+        Ok(_res) => Ok(()),
         Err(err) => Err(err),
     }
 }

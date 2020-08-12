@@ -1,4 +1,4 @@
-use log::info;
+use log::{error, info};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -19,7 +19,9 @@ impl RecoverEntry {
 }
 
 pub struct FileStore {
+    path: String,
     files_to_sync: Vec<RecoverEntry>,
+    files_to_distribute: Vec<String>,
     files: HashMap<String, String>,
     capacity: u32,
     rejected_hashes: Vec<String>,
@@ -30,10 +32,13 @@ pub trait FileStoreFunc {
     fn new(capacity: u32, path: &str) -> FileStore;
     fn get_file(&self, hash: &str) -> Option<&String>;
     fn insert_file(&mut self, hash: &str, content: &str);
+    fn save_file(&self, path: &str, hash: &str, content: &[u8]);
     fn remove_file(&mut self, hash: &str);
     fn insert_files_to_recover(&mut self, entries: Vec<RecoverEntry>);
     fn next_file_to_recover(&mut self) -> Option<RecoverEntry>;
-    fn hashes(&self) -> Vec<String>;
+    fn insert_file_to_distribute(&mut self, hash: &str);
+    fn next_file_to_distribute(&mut self) -> Option<String>;
+    fn hashes(&self) -> std::io::Result<Vec<String>>;
     fn capacity_left(&self) -> u32;
     fn reject_hash(&mut self, hash: &str);
     fn rejected_hashes(&self) -> Vec<String>;
@@ -47,11 +52,20 @@ pub trait FileStoreFunc {
 
 impl FileStoreFunc for FileStore {
     fn new(capacity: u32, path: &str) -> FileStore {
-        let files = FileStore::restore_files(path);
+        // let files = FileStore::restore_files(path);
+        let files = HashMap::new();
         info!("FileStore initialized: {:?}", files);
 
+        if let Err(err) = std::fs::create_dir_all(path) {
+            if !std::path::Path::new(path).exists() {
+                panic!("{}", err);
+            }
+        }
+
         FileStore {
+            path: String::from(path),
             files_to_sync: vec![],
+            files_to_distribute: vec![],
             files,
             capacity,
             rejected_hashes: vec![],
@@ -65,12 +79,21 @@ impl FileStoreFunc for FileStore {
 
     fn insert_file(&mut self, hash: &str, content: &str) {
         self.files.insert(String::from(hash), String::from(content));
-        println!("{:?}", self.files);
     }
 
     fn remove_file(&mut self, hash: &str) {
-        info!("Removing {}", hash);
-        self.files.remove(hash);
+        // self.files.remove(hash);
+        let path = format!("{}/{}", self.path, hash);
+        match std::fs::remove_file(path) {
+            Ok(_) => info!("Removed {}", hash),
+            Err(err) => error!("{}", err),
+        }
+    }
+
+    fn save_file(&self, fingerprint: &str, hash: &str, content: &[u8]) {
+        let filepath = format!("./files/{}/{}", fingerprint, hash);
+        let mut file = std::fs::File::create(filepath).unwrap();
+        let _res = file.write_all(content);
     }
 
     fn insert_files_to_recover(&mut self, entries: Vec<RecoverEntry>) {
@@ -88,11 +111,30 @@ impl FileStoreFunc for FileStore {
             .and_then(|index| Some(self.files_to_sync.remove(index)))
     }
 
-    fn hashes(&self) -> Vec<String> {
-        self.files
-            .keys()
-            .map(|key| String::from(key.clone()))
-            .collect()
+    fn insert_file_to_distribute(&mut self, hash: &str) {
+        self.files_to_distribute.push(String::from(hash));
+    }
+
+    fn next_file_to_distribute(&mut self) -> Option<String> {
+        if self.files_to_distribute.is_empty() {
+            return None;
+        }
+
+        Some(self.files_to_distribute.remove(0))
+    }
+
+    fn hashes(&self) -> std::io::Result<Vec<String>> {
+        let mut hashes: Vec<String> = vec![];
+        for entry in std::fs::read_dir(self.path.clone())? {
+            let e = entry?;
+            hashes.push(e.file_name().into_string().unwrap());
+        }
+
+        return Ok(hashes);
+        // self.files
+        //     .keys()
+        //     .map(|key| String::from(key.clone()))
+        //     .collect()
     }
 
     fn capacity_left(&self) -> u32 {
@@ -121,17 +163,14 @@ impl FileStoreFunc for FileStore {
 
     fn restore_files(path: &str) -> HashMap<String, String> {
         // let mut file = File::open(path)?;
-        info!("{}", path);
         let result = File::open(path)
             .and_then(|mut file| {
                 let mut contents = String::new();
                 let _ = file.read_to_string(&mut contents);
-                info!("{:?}", contents);
                 Ok(contents)
             })
             .and_then(|content| {
                 let files: HashMap<String, String> = serde_json::from_str(&content).unwrap();
-                info!("{:?}", files);
                 Ok(files)
             });
 

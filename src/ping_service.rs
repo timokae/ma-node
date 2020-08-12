@@ -99,8 +99,6 @@ impl PingService {
             .files_to_delete
             .iter()
             .for_each(|hash| app_state.file_store.write().unwrap().remove_file(hash));
-
-        // info!("Ping successfull.")
     }
 
     fn handle_request_error(error: reqwest::Error) {
