@@ -32,7 +32,7 @@ impl AppState {
         stop_services: Arc<AtomicBool>,
         force_ping: Arc<AtomicBool>,
     ) -> AppState {
-        let path = format!("./files/{}", &config.fingerprint);
+        let path = format!("./state/{}", &config.fingerprint);
 
         let file_store = RwLock::new(FileStore::new(config.stats.capacity.value, &path));
         let config_store = RwLock::new(ConfigStore::new(
@@ -64,7 +64,7 @@ impl AppState {
             fingerprint: config.fingerprint(),
             port: config.port(),
             weight: self.calculate_weight(),
-            files: self.file_store.read().unwrap().hashes().unwrap(),
+            files: self.file_store.read().unwrap().hashes(),
             capacity_left,
             rejected_hashes: self.file_store.read().unwrap().rejected_hashes(),
             uploaded_hashes: self.file_store.read().unwrap().uploaded_hashes(),
@@ -75,14 +75,20 @@ impl AppState {
         return ping;
     }
 
-    pub fn add_new_file(&self, content: &[u8], distribute: bool) -> String {
+    pub fn add_new_file(
+        &self,
+        content: &[u8],
+        content_type: &str,
+        file_name: &str,
+        distribute: bool,
+    ) -> String {
         let hash = self.config_store.write().unwrap().hash_content(content);
-        let fingerprint = self.config_store.read().unwrap().fingerprint();
 
+        // Add file to file_store and disk
         self.file_store
             .write()
             .unwrap()
-            .save_file(&fingerprint, &hash, &content);
+            .save_file(&hash, content, content_type, file_name);
 
         self.file_store
             .write()
@@ -102,9 +108,7 @@ impl AppState {
     }
 
     pub fn write_to_disk(&self) {
-        let fingerprint = self.config_store.read().unwrap().fingerprint();
-        let path = format!("files/{}.json", fingerprint);
-        let _ = self.file_store.read().unwrap().save_files(&path);
+        let _ = self.file_store.read().unwrap().serialize_state();
     }
 
     fn calculate_weight(&self) -> f32 {

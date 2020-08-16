@@ -2,8 +2,8 @@ use crate::app_state::Ping;
 use crate::config_store::Monitor;
 use crate::server::DownloadResponse;
 use crate::stat_store::Stats;
+use log::error;
 use serde::{Deserialize, Serialize};
-
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RegisterRequest {
     pub region: String,
@@ -98,14 +98,53 @@ pub async fn download_from_node(
         Ok(res) => {
             // let result = res.json::<DownloadResponse>().await?;
             // return Ok(result);
-            let content = res.text().await?;
+            let headers = res.headers().clone();
 
+            let octet_stream =
+                &reqwest::header::HeaderValue::from_str("application/octet-stream").unwrap();
+            let content_type = headers
+                .get("Content-Type")
+                .or(Some(octet_stream))
+                .unwrap()
+                .to_str()
+                .unwrap();
+
+            let header_value = headers
+                .get("content-disposition")
+                .unwrap()
+                .to_str()
+                .unwrap();
+
+            let content = res.text().await?;
             Ok(DownloadResponse {
                 hash: String::from(hash),
                 content,
+                content_type: String::from(content_type),
+                file_name: get_file_name(header_value),
             })
         }
         Err(err) => Err(err),
+    }
+}
+
+fn get_file_name(header_value: &str) -> String {
+    if !header_value.contains("filename") {
+        error!("Header does not contain filename!");
+        return String::from("Does not contain filename");
+    }
+
+    match header_value.split(";").find(|s| s.contains("filename")) {
+        Some(result) => {
+            let parts: Vec<&str> = result.split("=").collect();
+            let mut name = String::from(parts[1]);
+            name.retain(|c| c != '\'');
+            let result = name.trim();
+            return String::from(result);
+        }
+        None => {
+            error!("Could not extract filename from header");
+            return String::from("unknown");
+        }
     }
 }
 

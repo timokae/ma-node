@@ -22,19 +22,17 @@ pub async fn start_server(
     receiver: oneshot::Receiver<()>,
 ) -> std::io::Result<()> {
     let port = app_state.config_store.read().unwrap().port();
-    let fingerprint = app_state.config_store.read().unwrap().fingerprint();
-    let file_dir = format!("./files/{}", fingerprint);
     let state_filter = warp::any().map(move || app_state.clone());
-
-    // let download_hash = warp::get()
-    //     .and(warp::path("download"))
-    //     .and(warp::path::param::<String>())
-    //     .and(state_filter.clone())
-    //     .and_then(download);
 
     let download_hash = warp::get()
         .and(warp::path("download"))
-        .and(warp::fs::dir(file_dir));
+        .and(warp::path::param::<String>())
+        .and(state_filter.clone())
+        .and_then(download);
+
+    // let download_hash = warp::get()
+    //     .and(warp::path("download"))
+    //     .and(warp::fs::dir(file_dir));
 
     // let upload_file = warp::post()
     //     .and(warp::path("upload"))
@@ -71,31 +69,41 @@ pub async fn start_server(
 pub struct DownloadResponse {
     pub hash: String,
     pub content: String,
+    pub content_type: String,
+    pub file_name: String,
 }
 
-// async fn download(hash: String, state: Arc<AppState>) -> Result<impl warp::Reply, warp::Rejection> {
-//     match state.file_store.read().unwrap().get_file(&hash) {
-//         Some(content) => {
-//             let response = DownloadResponse {
-//                 hash,
-//                 content: String::from(content),
-//             };
+async fn download(hash: String, state: Arc<AppState>) -> Result<impl warp::Reply, warp::Rejection> {
+    match state.file_store.read().unwrap().get_file(&hash) {
+        Some(file_entry) => {
+            let response = warp::http::Response::builder()
+                .header("Content-Type", &file_entry.content_type)
+                .header(
+                    "Content-Disposition",
+                    format!(":attachment; filename='{}'", &file_entry.file_name),
+                )
+                .body(file_entry.content().unwrap())
+                .unwrap();
 
-//             let reply = warp::reply::json(&response);
-//             return Ok(warp::reply::with_status(reply, warp::http::StatusCode::OK));
-//         }
-//         None => {
-//             error!("Could not find file with hash {}", hash);
-//         }
-//     }
+            return Ok(warp::reply::with_status(
+                response,
+                warp::http::StatusCode::OK,
+            ));
+        }
+        None => {
+            error!("Could not find file with hash {}", hash);
+            let response = warp::http::Response::builder()
+                .status(warp::http::StatusCode::NOT_FOUND)
+                .body(String::from(""))
+                .unwrap();
 
-//     let empty_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-//     let reply = warp::reply::json(&empty_map);
-//     return Ok(warp::reply::with_status(
-//         reply,
-//         warp::http::StatusCode::NOT_FOUND,
-//     ));
-// }
+            return Ok(warp::reply::with_status(
+                response,
+                warp::http::StatusCode::NOT_FOUND,
+            ));
+        }
+    }
+}
 
 // #[derive(Deserialize)]
 // struct UploadRequest {
@@ -139,10 +147,12 @@ struct LookupResponse {
 }
 async fn lookup(hash: String, state: Arc<AppState>) -> Result<impl warp::Reply, warp::Rejection> {
     // Lookup in local filestore
-    if let Some(content) = state.file_store.read().unwrap().get_file(&hash) {
+    if let Some(file_entry) = state.file_store.read().unwrap().get_file(&hash) {
         let reply = warp::reply::json(&DownloadResponse {
             hash,
-            content: String::from(content),
+            content: file_entry.content().unwrap(),
+            content_type: String::from(&file_entry.content_type),
+            file_name: String::from(&file_entry.file_name),
         });
         return Ok(warp::reply::with_status(reply, warp::http::StatusCode::OK));
     }
@@ -174,7 +184,14 @@ async fn upload_multipart_fun(
         let mut part: warp::multipart::Part = field;
         let mut buf = part.data().await.unwrap().unwrap();
         let binary_vec = buf.to_bytes().to_vec();
-        state.add_new_file(binary_vec.as_slice(), true);
+
+        let content_type = part
+            .content_type()
+            .or(Some("application/octet-stream"))
+            .unwrap();
+
+        let filename = part.filename().or(Some("unknown")).unwrap();
+        state.add_new_file(binary_vec.as_slice(), content_type, filename, true);
     }
     return Ok(warp::reply::with_status(
         warp::reply::json(&String::from("lol")),

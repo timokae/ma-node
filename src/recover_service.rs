@@ -97,7 +97,12 @@ impl RecoverService {
 
         match download_from_node(&node_addr, hash).await {
             Ok(result) => {
-                app_state.add_new_file(result.content.as_bytes(), false);
+                app_state.add_new_file(
+                    result.content.as_bytes(),
+                    &result.content_type,
+                    &result.file_name,
+                    false,
+                );
                 info!("Recovered file with hash {}", hash);
                 // let hash = app_state.add_new_file(&result.content, false);
                 // info!("Recovered file {} with hash {}", &result.content, hash)
