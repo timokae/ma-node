@@ -27,6 +27,7 @@ use http_requests::{register_on_manager, RegisterResponse};
 use log::info;
 use ping_service::PingService;
 use recover_service::RecoverService;
+use stat_store::StatStoreFunc;
 use std::env;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 use tokio::sync::oneshot;
@@ -39,43 +40,48 @@ async fn main() -> std::io::Result<()> {
     let stop_services: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
     setup_close_handler(stop_services.clone(), shutdown_tx);
 
+    let force_ping = Arc::new(AtomicBool::new(true));
+
+    // Read config from file
     let args: Vec<String> = env::args().collect();
     let config_path: &String = &args[1].parse::<String>().unwrap();
     let config_from_file = config::parse_config(config_path);
-    let register_response =
-        run_registration(&config_from_file.manager_addr, &config_from_file.stats).await;
+    let stats = stat_store::StatStore::deserialize_state(&config_from_file.fingerprint);
 
-    let force_ping = Arc::new(AtomicBool::new(true));
+    // Register on manager
+    let register_response = run_registration(&config_from_file.manager_addr, &stats).await;
 
     info!(
         "Assigned to monitor on address {}",
         register_response.monitor_addr
     );
 
+    // Create appstate
     let app_state = Arc::new(AppState::new(
         config_from_file,
+        stats,
         &register_response.monitor_addr,
         register_response.monitors,
         stop_services.clone(),
         force_ping.clone(),
     ));
-
     info!(
         "Region: {}",
         app_state.stat_store.read().unwrap().stats.region
     );
 
+    //  Create background services
     let ping_service = PingService::new(app_state.clone(), 30);
     let recover_service = RecoverService::new(app_state.clone(), 10);
     let distribution_service = DistributionService::new(app_state.clone(), 10);
 
+    // Start background services
     let server_fut = server::start_server(app_state.clone(), shutdown_rx);
     let ping_fut = ping_service.start();
     let recover_fut = recover_service.start();
     let distribution_fut = distribution_service.start();
 
     info!("Services started");
-    // shutdown_tx.send(()).expect("Shutdown server");
     let _ = tokio::try_join!(server_fut, ping_fut, recover_fut, distribution_fut);
 
     info!("Sending shutdown signal");
@@ -84,7 +90,7 @@ async fn main() -> std::io::Result<()> {
         http_requests::notify_monitor_about_shutdown(&fingerprint, &register_response.monitor_addr)
             .await;
 
-    app_state.write_to_disk();
+    app_state.serialize_state();
 
     Ok(())
 }

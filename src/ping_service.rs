@@ -7,6 +7,7 @@ use crate::app_state::AppState;
 use crate::config_store::ConfigStoreFunc;
 use crate::file_store::{FileStoreFunc, RecoverEntry};
 use crate::http_requests::{ping_monitor, PingResponse};
+use crate::stat_store::StatStoreFunc;
 
 pub struct PingService {
     pub app_state: Arc<AppState>,
@@ -25,9 +26,16 @@ impl PingService {
                 if force_ping.load(Ordering::Relaxed)
                     || last_ping.elapsed().as_secs() > self.timeout
                 {
+                    self.app_state
+                        .stat_store
+                        .write()
+                        .unwrap()
+                        .increase_uptime_counter(last_ping.elapsed().as_secs());
+
                     let _ = PingService::ping_monitor(self.app_state.clone()).await;
 
                     force_ping.swap(false, Ordering::Relaxed);
+
                     last_ping = std::time::Instant::now();
                 } else {
                     std::thread::sleep(Duration::from_secs(1));

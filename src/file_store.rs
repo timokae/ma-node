@@ -111,9 +111,14 @@ impl FileStoreFunc for FileStore {
     }
 
     fn save_file(&mut self, hash: &str, content: &[u8], content_type: &str, file_name: &str) {
+        // Create dir if not exist
+        let file_dir = std::path::Path::new(&self.path).join("files");
+        if !file_dir.exists() {
+            let _ = std::fs::create_dir_all(file_dir);
+        }
         // Create physical file
-        let filepath = format!("{}/files/{}", self.path, hash);
-        let mut file = std::fs::File::create(&filepath).unwrap();
+        let file_path = format!("{}/files/{}", self.path, hash);
+        let mut file = std::fs::File::create(&file_path).unwrap();
         let _res = file.write_all(content);
 
         // Create file entry
@@ -121,7 +126,7 @@ impl FileStoreFunc for FileStore {
             hash: String::from(hash),
             file_name: String::from(file_name),
             content_type: String::from(content_type),
-            path: String::from(&filepath),
+            path: String::from(&file_path),
         };
         self.files.insert(String::from(hash), file_entry);
     }

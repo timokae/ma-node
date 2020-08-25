@@ -4,7 +4,7 @@ use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc, RwLock};
 use crate::config::ConfigFromFile;
 use crate::config_store::{ConfigStore, ConfigStoreFunc, Monitor};
 use crate::file_store::{FileStore, FileStoreFunc};
-use crate::stat_store::{StatStore, StatStoreFunc};
+use crate::stat_store::{StatStore, StatStoreFunc, Stats};
 #[derive(Serialize)]
 pub struct Ping {
     pub fingerprint: String,
@@ -27,6 +27,7 @@ pub struct AppState {
 impl AppState {
     pub fn new(
         config: ConfigFromFile,
+        stats: Stats,
         monitor_addr: &str,
         monitors: Vec<Monitor>,
         stop_services: Arc<AtomicBool>,
@@ -34,7 +35,7 @@ impl AppState {
     ) -> AppState {
         let path = format!("./state/{}", &config.fingerprint);
 
-        let file_store = RwLock::new(FileStore::new(config.stats.capacity.value, &path));
+        let file_store = RwLock::new(FileStore::new(stats.capacity.value, &path));
         let config_store = RwLock::new(ConfigStore::new(
             &config.manager_addr,
             monitor_addr.clone(),
@@ -42,9 +43,7 @@ impl AppState {
             config.port,
             &config.fingerprint,
         ));
-        let stat_store = RwLock::new(StatStore {
-            stats: config.stats,
-        });
+        let stat_store = RwLock::new(StatStore::new(stats, path));
 
         AppState {
             file_store,
@@ -107,8 +106,9 @@ impl AppState {
         return hash;
     }
 
-    pub fn write_to_disk(&self) {
-        let _ = self.file_store.read().unwrap().serialize_state();
+    pub fn serialize_state(&self) {
+        self.file_store.read().unwrap().serialize_state();
+        self.stat_store.read().unwrap().serialize_state();
     }
 
     fn calculate_weight(&self) -> f32 {
