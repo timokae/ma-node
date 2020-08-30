@@ -163,9 +163,25 @@ pub async fn notify_monitor_about_shutdown(
     }
 }
 
-pub async fn distribute_to_monitor(hash: &str, monitor_addr: &str) -> Result<(), reqwest::Error> {
+#[derive(Serialize)]
+pub struct DistributionRequest {
+    pub replications: u32,
+    pub port: u16,
+    pub own_monitor: bool,
+    pub fingerprint: String,
+}
+
+pub async fn distribute_to_monitor(
+    hash: &str,
+    monitor_addr: &str,
+    distribution_request: &DistributionRequest,
+) -> Result<(), reqwest::Error> {
     let url = format!("{}/distribute/{}?forward=false", monitor_addr, hash);
-    let response = reqwest::Client::new().post(&url).send().await?;
+    let response = reqwest::Client::new()
+        .post(&url)
+        .json(distribution_request)
+        .send()
+        .await?;
 
     match response.error_for_status() {
         Ok(_res) => Ok(()),

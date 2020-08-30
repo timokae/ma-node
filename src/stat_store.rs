@@ -124,19 +124,19 @@ impl StatStoreFunc for StatStore {
         let now = chrono::Utc::now().timestamp() as u64;
         let total_seconds = now - self.stats.first_online;
 
-        println!(
-            "Total {}, Counter {}",
-            total_seconds, self.stats.uptime_counter.value
-        );
+        // println!(
+        //     "Total {}, Counter {}",
+        //     total_seconds, self.stats.uptime_counter.value
+        // );
 
         if total_seconds == 0 {
             return 0.0;
         }
 
-        println!(
-            "Result: {}",
-            self.stats.uptime_counter.value as f32 / total_seconds as f32
-        );
+        // println!(
+        //     "Result: {}",
+        //     self.stats.uptime_counter.value as f32 / total_seconds as f32
+        // );
         (self.stats.uptime_counter.value as f32 / total_seconds as f32)
             * self.stats.uptime_counter.weight
     }

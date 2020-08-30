@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::app_state::AppState;
 use crate::config_store::{ConfigStoreFunc, Monitor};
 use crate::file_store::FileStoreFunc;
-use crate::http_requests::distribute_to_monitor;
+use crate::http_requests::{distribute_to_monitor, DistributionRequest};
 
 pub struct DistributionService {
     pub app_state: Arc<AppState>,
@@ -16,7 +16,11 @@ impl DistributionService {
     pub async fn start(self) -> std::io::Result<()> {
         tokio::spawn(async move {
             let own_monitor_addr = self.app_state.config_store.read().unwrap().monitor();
-            let monitors: Vec<Monitor> = self
+            let own_port = self.app_state.config_store.read().unwrap().port();
+            let own_fingerprint = self.app_state.config_store.read().unwrap().fingerprint();
+            let replications: u32 = 2;
+
+            let foreign_monitors: Vec<Monitor> = self
                 .app_state
                 .config_store
                 .read()
@@ -40,10 +44,34 @@ impl DistributionService {
                     .next_file_to_distribute();
 
                 if let Some(hash) = hash_opt {
-                    for monitor in &monitors {
-                        info!("Distributing {} to monitor {}", hash, monitor.addr);
+                    // Distribute to own monitor
+                    let own_distribution_request = DistributionRequest {
+                        port: own_port,
+                        fingerprint: String::from(&own_fingerprint),
+                        own_monitor: true,
+                        replications,
+                    };
+                    info!("Distributing {} to own monitor {}", hash, own_monitor_addr);
+                    if let Err(err) =
+                        distribute_to_monitor(&hash, &own_monitor_addr, &own_distribution_request)
+                            .await
+                    {
+                        error!("{}", err);
+                    }
 
-                        if let Err(err) = distribute_to_monitor(&hash, &monitor.addr).await {
+                    // Distribute to foreign monitors
+                    for monitor in &foreign_monitors {
+                        info!("Distributing {} to monitor {}", hash, monitor.addr);
+                        let distribution_request = DistributionRequest {
+                            port: own_port,
+                            fingerprint: String::from(&own_fingerprint),
+                            own_monitor: false,
+                            replications,
+                        };
+
+                        if let Err(err) =
+                            distribute_to_monitor(&hash, &monitor.addr, &distribution_request).await
+                        {
                             error!("{}", err);
                         }
                     }
