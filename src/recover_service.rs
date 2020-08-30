@@ -98,7 +98,7 @@ impl RecoverService {
         match download_from_node(&node_addr, hash).await {
             Ok(result) => {
                 app_state.add_new_file(
-                    result.content.as_bytes(),
+                    &result.content,
                     &result.content_type,
                     &result.file_name,
                     false,

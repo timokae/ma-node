@@ -28,8 +28,8 @@ pub struct FileEntry {
 }
 
 impl FileEntry {
-    pub fn content(&self) -> Option<String> {
-        match std::fs::read_to_string(&self.path) {
+    pub fn content(&self) -> Option<Vec<u8>> {
+        match std::fs::read(&self.path) {
             Ok(content) => Some(content),
             Err(_err) => None,
         }

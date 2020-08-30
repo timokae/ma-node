@@ -115,7 +115,7 @@ pub async fn download_from_node(
                 .to_str()
                 .unwrap();
 
-            let content = res.text().await?;
+            let content = res.bytes().await.unwrap().to_vec();
             Ok(DownloadResponse {
                 hash: String::from(hash),
                 content,

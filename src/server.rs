@@ -68,7 +68,7 @@ pub async fn start_server(
 #[derive(Deserialize, Serialize, Clone)]
 pub struct DownloadResponse {
     pub hash: String,
-    pub content: String,
+    pub content: Vec<u8>,
     pub content_type: String,
     pub file_name: String,
 }
@@ -94,7 +94,7 @@ async fn download(hash: String, state: Arc<AppState>) -> Result<impl warp::Reply
             error!("Could not find file with hash {}", hash);
             let response = warp::http::Response::builder()
                 .status(warp::http::StatusCode::NOT_FOUND)
-                .body(String::from(""))
+                .body(vec!())
                 .unwrap();
 
             return Ok(warp::reply::with_status(
