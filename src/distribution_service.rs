@@ -17,7 +17,6 @@ impl DistributionService {
         tokio::spawn(async move {
             let own_monitor = self.app_state.config_store.read().unwrap().monitor();
             let own_fingerprint = self.app_state.config_store.read().unwrap().fingerprint();
-            let replications: u32 = 2;
 
             let foreign_monitors: Vec<Monitor> = self
                 .app_state
@@ -43,37 +42,13 @@ impl DistributionService {
                     .next_file_to_distribute();
 
                 if let Some(hash) = hash_opt {
-                    // Distribute to own monitor
-                    let own_distribution_request = DistributionRequest {
-                        port: own_port,
-                        fingerprint: String::from(&own_fingerprint),
-                        own_monitor: true,
-                        replications,
-                    };
-                    info!("Distributing {} to own monitor {}", hash, own_monitor_addr);
-                    if let Err(err) =
-                        distribute_to_monitor(&hash, &own_monitor_addr, &own_distribution_request)
-                            .await
-                    {
-                        error!("{}", err);
-                    }
-
-                    // Distribute to foreign monitors
-                    for monitor in &foreign_monitors {
-                        info!("Distributing {} to monitor {}", hash, monitor.addr);
-                        let distribution_request = DistributionRequest {
-                            port: own_port,
-                            fingerprint: String::from(&own_fingerprint),
-                            own_monitor: false,
-                            replications,
-                        };
-
-                        if let Err(err) =
-                            distribute_to_monitor(&hash, &monitor.addr, &distribution_request).await
-                        {
-                            error!("{}", err);
-                        }
-                    }
+                    DistributionService::simple_distribution(
+                        &own_fingerprint,
+                        &own_monitor,
+                        &foreign_monitors,
+                        &hash,
+                    )
+                    .await;
                 } else {
                     std::thread::sleep(Duration::from_secs(self.timeout));
                 }
@@ -94,5 +69,44 @@ impl DistributionService {
 
     pub fn new(app_state: Arc<AppState>, timeout: u64) -> DistributionService {
         DistributionService { app_state, timeout }
+    }
+
+    async fn simple_distribution(
+        own_fingerprint: &str,
+        own_monitor: &Monitor,
+        foreign_monitors: &Vec<Monitor>,
+        hash: &str,
+    ) {
+        let replications = 2;
+
+        // Distribute to own monitor
+        let own_distribution_request = DistributionRequest {
+            fingerprint: String::from(own_fingerprint),
+            own_monitor: true,
+            replications,
+        };
+
+        info!("Distributing {} to own monitor {}", hash, own_monitor.addr);
+        if let Err(err) =
+            distribute_to_monitor(&hash, &own_monitor.addr, &own_distribution_request).await
+        {
+            error!("{}", err);
+        }
+
+        // Distribute to foreign monitors
+        for monitor in foreign_monitors {
+            info!("Distributing {} to monitor {}", hash, monitor.addr);
+            let distribution_request = DistributionRequest {
+                fingerprint: String::from(own_fingerprint),
+                own_monitor: false,
+                replications,
+            };
+
+            if let Err(err) =
+                distribute_to_monitor(&hash, &monitor.addr, &distribution_request).await
+            {
+                error!("{}", err);
+            }
+        }
     }
 }
