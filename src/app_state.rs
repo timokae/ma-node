@@ -70,6 +70,7 @@ impl AppState {
         };
 
         self.file_store.write().unwrap().clear_uploaded_hashes();
+        self.file_store.write().unwrap().clear_rejected_hashes();
 
         return ping;
     }
