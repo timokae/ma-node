@@ -94,7 +94,7 @@ async fn download(hash: String, state: Arc<AppState>) -> Result<impl warp::Reply
             error!("Could not find file with hash {}", hash);
             let response = warp::http::Response::builder()
                 .status(warp::http::StatusCode::NOT_FOUND)
-                .body(vec!())
+                .body(vec![])
                 .unwrap();
 
             return Ok(warp::reply::with_status(
