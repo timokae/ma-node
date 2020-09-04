@@ -38,7 +38,10 @@ impl RecoverService {
                 if let Some(entry) = recover_opt {
                     info!("Trying to recover {}", entry.hash);
 
-                    if self.app_state.file_store.read().unwrap().capacity_left() <= 0 {
+                    let has_no_capacity =
+                        self.app_state.file_store.read().unwrap().capacity_left() <= 0;
+
+                    if has_no_capacity {
                         self.app_state
                             .file_store
                             .write()
