@@ -12,7 +12,7 @@ pub struct Ping {
     pub weight: f32,
     pub files: Vec<String>,
     pub rejected_hashes: Vec<String>,
-    pub capacity_left: u32,
+    pub capacity_left: u64,
     pub uploaded_hashes: Vec<String>,
 }
 

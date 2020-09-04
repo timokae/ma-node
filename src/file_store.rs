@@ -41,8 +41,7 @@ pub struct FileStore {
     files_to_sync: Vec<RecoverEntry>,
     files_to_distribute: Vec<String>,
     files: HashMap<String, FileEntry>,
-    capacity: u32,
-    rejected_hashes: Vec<String>,
+    capacity: u64,
     new_hashes: Vec<String>,
 }
 
@@ -166,10 +165,17 @@ impl FileStoreFunc for FileStore {
             .collect::<Vec<String>>()
     }
 
-    fn capacity_left(&self) -> u32 {
-        let stored_files = self.files.len() as u32;
-        let to_be_stored_files = self.files_to_sync.len() as u32;
-        self.capacity - stored_files - to_be_stored_files
+    fn capacity_left(&self) -> u64 {
+        let used = self.files.values().fold(0, |acc, file_entry| {
+            let metadata = std::fs::metadata(&file_entry.path).unwrap();
+            acc + metadata.len()
+        });
+
+        if used > self.capacity {
+            return 0;
+        }
+
+        self.capacity - used
     }
 
     fn reject_hash(&mut self, hash: &str) {

@@ -14,7 +14,7 @@ pub struct Stats {
     pub first_online: u64,
     pub region: String,
     pub uptime: Stat<Vec<u32>>,
-    pub capacity: Stat<u32>,
+    pub capacity: Stat<u64>,
     pub connection: Stat<u32>,
     pub uptime_counter: Stat<u64>,
 }
@@ -27,9 +27,9 @@ pub struct StatStore {
 
 pub trait StatStoreFunc {
     fn new(stats: Stats, path: String) -> StatStore;
-    fn total_rating(&self, capacity_left: u32) -> f32;
+    fn total_rating(&self, capacity_left: u64) -> f32;
     fn connection_rating(&self) -> f32;
-    fn capacity_rating(&self, capacity_left: u32) -> f32;
+    fn capacity_rating(&self, capacity_left: u64) -> f32;
     fn uptime_rating(&self) -> f32;
     fn uptime_left_rating(&self) -> f32;
     fn uptime_count_rating(&self) -> f32;
@@ -47,7 +47,7 @@ impl StatStoreFunc for StatStore {
 
         StatStore { stats, path }
     }
-    fn total_rating(&self, capacity_left: u32) -> f32 {
+    fn total_rating(&self, capacity_left: u64) -> f32 {
         self.connection_rating()
             + self.capacity_rating(capacity_left)
             + self.uptime_rating()
@@ -112,7 +112,7 @@ impl StatStoreFunc for StatStore {
         (minutes_left / total_uptime_in_minutes) * self.stats.uptime.weight
     }
 
-    fn capacity_rating(&self, capacity_left: u32) -> f32 {
+    fn capacity_rating(&self, capacity_left: u64) -> f32 {
         // error!(
         //     "Capacity Rating: {}",
         //     (capacity_left as f32 / self.stats.capacity.value as f32) * self.stats.capacity.weight
