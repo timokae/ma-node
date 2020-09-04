@@ -1,3 +1,4 @@
+use log::debug;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -42,11 +43,12 @@ pub struct FileStore {
     files_to_distribute: Vec<String>,
     files: HashMap<String, FileEntry>,
     capacity: u64,
+    hashes_to_reject: Vec<String>,
     new_hashes: Vec<String>,
 }
 
 pub trait FileStoreFunc {
-    fn new(capacity: u32, path: &str) -> FileStore;
+    fn new(capacity: u64, path: &str) -> FileStore;
     fn get_file(&self, hash: &str) -> Option<&FileEntry>;
     fn save_file(&mut self, hash: &str, content: &[u8], content_type: &str, file_name: &str);
     fn remove_file(&mut self, hash: &str);
@@ -55,7 +57,7 @@ pub trait FileStoreFunc {
     fn insert_file_to_distribute(&mut self, hash: &str);
     fn next_file_to_distribute(&mut self) -> Option<String>;
     fn hashes(&self) -> Vec<String>;
-    fn capacity_left(&self) -> u32;
+    fn capacity_left(&self) -> u64;
     fn reject_hash(&mut self, hash: &str);
     fn rejected_hashes(&self) -> Vec<String>;
     fn clear_rejected_hashes(&mut self);
@@ -67,7 +69,7 @@ pub trait FileStoreFunc {
 }
 
 impl FileStoreFunc for FileStore {
-    fn new(capacity: u32, path: &str) -> FileStore {
+    fn new(capacity: u64, path: &str) -> FileStore {
         let file_state_path = format!("{}/file_state.json", path);
         let files = FileStore::deserialize_state(&file_state_path);
         let tmp = files
@@ -88,21 +90,24 @@ impl FileStoreFunc for FileStore {
             files_to_distribute: vec![],
             files,
             capacity,
-            rejected_hashes: vec![],
+            hashes_to_reject: vec![],
             new_hashes: vec![],
         }
     }
 
     fn get_file(&self, hash: &str) -> Option<&FileEntry> {
+        debug!("[FileStore.get_file] {}", hash);
         self.files.get(hash)
     }
 
     fn remove_file(&mut self, hash: &str) {
+        debug!("[FileStore.remove_file] {}", hash);
+
         if let Some(file_entry) = self.files.get(hash) {
             match std::fs::remove_file(&file_entry.path) {
                 Ok(_) => {
+                    info!("Removed file {}", hash);
                     self.files.remove(hash);
-                    info!("Removed {}", hash);
                 }
                 Err(err) => error!("{}", err),
             }
@@ -110,11 +115,17 @@ impl FileStoreFunc for FileStore {
     }
 
     fn save_file(&mut self, hash: &str, content: &[u8], content_type: &str, file_name: &str) {
+        debug!(
+            "[FileStore.save_file] hash: {}, file_name: {}",
+            hash, file_name
+        );
+
         // Create dir if not exist
         let file_dir = std::path::Path::new(&self.path).join("files");
         if !file_dir.exists() {
             let _ = std::fs::create_dir_all(file_dir);
         }
+
         // Create physical file
         let file_path = format!("{}/files/{}", self.path, hash);
         let mut file = std::fs::File::create(&file_path).unwrap();
@@ -132,7 +143,14 @@ impl FileStoreFunc for FileStore {
 
     fn insert_files_to_recover(&mut self, entries: Vec<RecoverEntry>) {
         for entry in entries {
-            if !self.files.contains_key(&entry.hash) {
+            if self.files.contains_key(&entry.hash) {
+                self.reject_hash(&entry.hash);
+                debug!(
+                    "[FileStore.insert_files_to_recover] Rejected {}",
+                    &entry.hash
+                );
+            } else {
+                debug!("[FileStore.insert_files_to_recover] Sync {}", &entry.hash);
                 self.files_to_sync.push(entry);
             }
         }
@@ -179,15 +197,20 @@ impl FileStoreFunc for FileStore {
     }
 
     fn reject_hash(&mut self, hash: &str) {
-        self.rejected_hashes.push(String::from(hash));
+        self.hashes_to_reject.push(String::from(hash));
     }
 
     fn rejected_hashes(&self) -> Vec<String> {
-        self.rejected_hashes.clone()
+        let x = self
+            .hashes_to_reject
+            .iter()
+            .map(|hash| String::from(hash))
+            .collect::<Vec<String>>();
+        return x;
     }
 
     fn clear_rejected_hashes(&mut self) {
-        self.rejected_hashes.clear();
+        self.hashes_to_reject.clear();
     }
 
     fn serialize_state(&self) {
@@ -216,7 +239,10 @@ impl FileStoreFunc for FileStore {
     }
 
     fn uploaded_hashes(&self) -> Vec<String> {
-        self.new_hashes.clone()
+        self.new_hashes
+            .iter()
+            .map(|hash| String::from(hash))
+            .collect()
     }
 
     fn add_hash_to_uploaded_hashes(&mut self, hash: &str) {
