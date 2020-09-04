@@ -50,17 +50,14 @@ async fn main() -> std::io::Result<()> {
 
     // Register on manager
     let register_response = run_registration(&config_from_file.manager_addr, &stats).await;
-
-    info!(
-        "Assigned to monitor on address {}",
-        register_response.monitor_addr
-    );
+    let monitor_addr = String::from(&register_response.own_monitor.addr);
+    info!("Assigned to monitor on address {}", monitor_addr);
 
     // Create appstate
     let app_state = Arc::new(AppState::new(
         config_from_file,
         stats,
-        &register_response.monitor_addr,
+        register_response.own_monitor,
         register_response.monitors,
         stop_services.clone(),
         force_ping.clone(),
@@ -86,9 +83,7 @@ async fn main() -> std::io::Result<()> {
 
     info!("Sending shutdown signal");
     let fingerprint = app_state.config_store.read().unwrap().fingerprint();
-    let _ =
-        http_requests::notify_monitor_about_shutdown(&fingerprint, &register_response.monitor_addr)
-            .await;
+    let _ = http_requests::notify_monitor_about_shutdown(&fingerprint, &monitor_addr).await;
 
     app_state.serialize_state();
 

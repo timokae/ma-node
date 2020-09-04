@@ -16,7 +16,7 @@ pub struct RecoverService {
 impl RecoverService {
     pub async fn start(self) -> std::io::Result<()> {
         tokio::spawn(async move {
-            let monitor_addr = self
+            let monitor = self
                 .app_state
                 .clone()
                 .config_store
@@ -47,7 +47,7 @@ impl RecoverService {
 
                         info!("Rejected hash {}", &entry.hash)
                     } else {
-                        match lookup_hash_on_monitor(&entry.hash, &monitor_addr).await {
+                        match lookup_hash_on_monitor(&entry.hash, &monitor.addr).await {
                             Ok(result) => {
                                 RecoverService::handle_lookup_success(
                                     self.app_state.clone(),

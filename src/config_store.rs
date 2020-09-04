@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 pub struct ConfigStore {
     manager_addr: String,
-    monitor_addr: String,
+    own_monitor: Monitor,
     monitors: Vec<Monitor>,
     port: u16,
     fingerprint: String,
@@ -18,12 +18,12 @@ pub struct Monitor {
 pub trait ConfigStoreFunc {
     fn new(
         manager_addr: &str,
-        monitor_addr: &str,
+        own_monitor: Monitor,
         monitors: Vec<Monitor>,
         port: u16,
         fingerprint: &str,
     ) -> ConfigStore;
-    fn monitor(&self) -> String;
+    fn monitor(&self) -> Monitor;
     fn monitors(&self) -> Vec<Monitor>;
     fn manager(&self) -> String;
     fn port(&self) -> u16;
@@ -34,22 +34,22 @@ pub trait ConfigStoreFunc {
 impl ConfigStoreFunc for ConfigStore {
     fn new(
         manager_addr: &str,
-        monitor_addr: &str,
+        own_monitor: Monitor,
         monitors: Vec<Monitor>,
         port: u16,
         fingerprint: &str,
     ) -> ConfigStore {
         ConfigStore {
             manager_addr: String::from(manager_addr),
-            monitor_addr: String::from(monitor_addr),
+            own_monitor,
             monitors,
             port,
             fingerprint: String::from(fingerprint),
         }
     }
 
-    fn monitor(&self) -> String {
-        self.monitor_addr.clone()
+    fn monitor(&self) -> Monitor {
+        self.own_monitor.clone()
     }
 
     fn monitors(&self) -> Vec<Monitor> {

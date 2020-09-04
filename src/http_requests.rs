@@ -19,7 +19,7 @@ impl RegisterRequest {
 }
 #[derive(Deserialize)]
 pub struct RegisterResponse {
-    pub monitor_addr: String,
+    pub own_monitor: Monitor,
     pub monitors: Vec<Monitor>,
 }
 pub async fn register_on_manager(
@@ -166,7 +166,6 @@ pub async fn notify_monitor_about_shutdown(
 #[derive(Serialize)]
 pub struct DistributionRequest {
     pub replications: u32,
-    pub port: u16,
     pub own_monitor: bool,
     pub fingerprint: String,
 }

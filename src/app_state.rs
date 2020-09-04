@@ -28,7 +28,7 @@ impl AppState {
     pub fn new(
         config: ConfigFromFile,
         stats: Stats,
-        monitor_addr: &str,
+        own_monitor: Monitor,
         monitors: Vec<Monitor>,
         stop_services: Arc<AtomicBool>,
         force_ping: Arc<AtomicBool>,
@@ -38,7 +38,7 @@ impl AppState {
         let file_store = RwLock::new(FileStore::new(stats.capacity.value, &path));
         let config_store = RwLock::new(ConfigStore::new(
             &config.manager_addr,
-            monitor_addr.clone(),
+            own_monitor.clone(),
             monitors,
             config.port,
             &config.fingerprint,

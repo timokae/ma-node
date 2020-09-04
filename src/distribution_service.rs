@@ -15,8 +15,7 @@ pub struct DistributionService {
 impl DistributionService {
     pub async fn start(self) -> std::io::Result<()> {
         tokio::spawn(async move {
-            let own_monitor_addr = self.app_state.config_store.read().unwrap().monitor();
-            let own_port = self.app_state.config_store.read().unwrap().port();
+            let own_monitor = self.app_state.config_store.read().unwrap().monitor();
             let own_fingerprint = self.app_state.config_store.read().unwrap().fingerprint();
             let replications: u32 = 2;
 
@@ -28,7 +27,7 @@ impl DistributionService {
                 .monitors()
                 .iter()
                 .cloned()
-                .filter(|m| m.addr != own_monitor_addr)
+                .filter(|m| m.addr != own_monitor.addr)
                 .collect();
 
             info!("Starting distribution service");

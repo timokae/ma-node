@@ -158,8 +158,8 @@ async fn lookup(hash: String, state: Arc<AppState>) -> Result<impl warp::Reply, 
     }
 
     // Forward lookup to monitor
-    let monitor_addr = state.config_store.read().unwrap().monitor();
-    if let Ok(response) = lookup_hash_on_monitor(&hash, &monitor_addr).await {
+    let monitor = state.config_store.read().unwrap().monitor();
+    if let Ok(response) = lookup_hash_on_monitor(&hash, &monitor.addr).await {
         let reply = warp::reply::json(&LookupResponse {
             hash,
             content: response.node_addr,

@@ -64,9 +64,8 @@ impl PingService {
 
     async fn ping_monitor(app_state: Arc<AppState>) {
         let ping = app_state.generate_ping();
-        let monitor_addr = app_state.config_store.read().unwrap().monitor();
-
-        match ping_monitor(&ping, &monitor_addr).await {
+        let monitor = app_state.config_store.read().unwrap().monitor();
+        match ping_monitor(&ping, &monitor.addr).await {
             Ok(ping_response) => {
                 PingService::handle_request_success(app_state.clone(), ping_response);
 
