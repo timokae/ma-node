@@ -166,7 +166,7 @@ pub async fn notify_monitor_about_shutdown(
 #[derive(Serialize)]
 pub struct DistributionRequest {
     pub replications: u32,
-    pub own_monitor: bool,
+    pub to_own_monitor: bool,
     pub fingerprint: String,
 }
 

@@ -1,4 +1,6 @@
 use log::{error, info};
+use rand::{seq::IteratorRandom, thread_rng};
+use std::collections::HashMap;
 use std::sync::{atomic::Ordering, Arc};
 use std::time::Duration;
 
@@ -42,7 +44,7 @@ impl DistributionService {
                     .next_file_to_distribute();
 
                 if let Some(hash) = hash_opt {
-                    DistributionService::simple_distribution(
+                    DistributionService::region_based_distribution(
                         &own_fingerprint,
                         &own_monitor,
                         &foreign_monitors,
@@ -71,6 +73,7 @@ impl DistributionService {
         DistributionService { app_state, timeout }
     }
 
+    #[allow(dead_code)]
     async fn simple_distribution(
         own_fingerprint: &str,
         own_monitor: &Monitor,
@@ -82,7 +85,7 @@ impl DistributionService {
         // Distribute to own monitor
         let own_distribution_request = DistributionRequest {
             fingerprint: String::from(own_fingerprint),
-            own_monitor: true,
+            to_own_monitor: true,
             replications,
         };
 
@@ -98,7 +101,7 @@ impl DistributionService {
             info!("Distributing {} to monitor {}", hash, monitor.addr);
             let distribution_request = DistributionRequest {
                 fingerprint: String::from(own_fingerprint),
-                own_monitor: false,
+                to_own_monitor: false,
                 replications,
             };
 
@@ -106,6 +109,66 @@ impl DistributionService {
                 distribute_to_monitor(&hash, &monitor.addr, &distribution_request).await
             {
                 error!("{}", err);
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    async fn region_based_distribution(
+        own_fingerprint: &str,
+        own_monitor: &Monitor,
+        foreign_monitors: &Vec<Monitor>,
+        hash: &str,
+    ) {
+        let replications_per_partition = 2;
+
+        let mut monitor_map: HashMap<String, Vec<Monitor>> = HashMap::new();
+        monitor_map
+            .entry(String::from(own_monitor.bound.get(0).unwrap()))
+            .or_insert(vec![])
+            .push(own_monitor.clone());
+
+        // Group monitors by bounds
+        for monitor in foreign_monitors {
+            let key = String::from(monitor.bound.get(0).unwrap());
+            monitor_map
+                .entry(key)
+                .or_insert(vec![])
+                .push(monitor.clone());
+        }
+
+        // Iterate over each monitor group
+        for (bound, monitor_vec) in monitor_map.iter() {
+            let mut choosen_monitors = monitor_vec.iter().choose_multiple(&mut thread_rng(), 1);
+
+            // Make sure that hashes get distributed to the own monitor
+            if bound == own_monitor.bound.first().unwrap()
+                && !choosen_monitors.contains(&own_monitor)
+            {
+                choosen_monitors.pop();
+                choosen_monitors.push(own_monitor);
+            }
+
+            // Iterate over monitors inside groups
+            for monitor in choosen_monitors {
+                info!(
+                    "Distributing {} to [{}]{}",
+                    hash,
+                    monitor.bound.first().unwrap(),
+                    monitor.addr
+                );
+
+                let distribution_request = DistributionRequest {
+                    fingerprint: String::from(own_fingerprint),
+                    to_own_monitor: monitor.addr == own_monitor.addr,
+                    replications: replications_per_partition,
+                };
+
+                if let Err(err) =
+                    distribute_to_monitor(&hash, &own_monitor.addr, &distribution_request).await
+                {
+                    error!("{}", err);
+                }
             }
         }
     }

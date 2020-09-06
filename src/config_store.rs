@@ -15,6 +15,12 @@ pub struct Monitor {
     pub bound: Vec<String>,
 }
 
+impl PartialEq for Monitor {
+    fn eq(&self, other: &Self) -> bool {
+        self.addr == other.addr
+    }
+}
+
 pub trait ConfigStoreFunc {
     fn new(
         manager_addr: &str,
