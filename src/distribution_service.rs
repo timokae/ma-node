@@ -165,7 +165,7 @@ impl DistributionService {
                 };
 
                 if let Err(err) =
-                    distribute_to_monitor(&hash, &own_monitor.addr, &distribution_request).await
+                    distribute_to_monitor(&hash, &monitor.addr, &distribution_request).await
                 {
                     error!("{}", err);
                 }
