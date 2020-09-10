@@ -120,22 +120,9 @@ impl DistributionService {
         foreign_monitors: &Vec<Monitor>,
         hash: &str,
     ) {
-        let replications_per_partition = 2;
+        let replications_per_monitor = 2;
 
-        let mut monitor_map: HashMap<String, Vec<Monitor>> = HashMap::new();
-        monitor_map
-            .entry(String::from(own_monitor.bound.get(0).unwrap()))
-            .or_insert(vec![])
-            .push(own_monitor.clone());
-
-        // Group monitors by bounds
-        for monitor in foreign_monitors {
-            let key = String::from(monitor.bound.get(0).unwrap());
-            monitor_map
-                .entry(key)
-                .or_insert(vec![])
-                .push(monitor.clone());
-        }
+        let monitor_map = DistributionService::group_monitors(own_monitor, foreign_monitors);
 
         // Iterate over each monitor group
         for (bound, monitor_vec) in monitor_map.iter() {
@@ -161,7 +148,7 @@ impl DistributionService {
                 let distribution_request = DistributionRequest {
                     fingerprint: String::from(own_fingerprint),
                     to_own_monitor: monitor.addr == own_monitor.addr,
-                    replications: replications_per_partition,
+                    replications: replications_per_monitor,
                 };
 
                 if let Err(err) =
@@ -171,5 +158,94 @@ impl DistributionService {
                 }
             }
         }
+    }
+
+    #[allow(dead_code)]
+    async fn locale_distribution(
+        own_fingerprint: &str,
+        own_monitor: &Monitor,
+        foreign_monitors: &Vec<Monitor>,
+        hash: &str,
+    ) {
+        let mut distant_relations: HashMap<String, String> = HashMap::new();
+        distant_relations.insert("europe".to_string(), "south_america".to_string());
+        distant_relations.insert("south_america".to_string(), "europe".to_string());
+        distant_relations.insert("north_america".to_string(), "oceania".to_string());
+        distant_relations.insert("asia".to_string(), "north_america".to_string());
+        distant_relations.insert("oceania".to_string(), "europe".to_string());
+
+        let replications_per_monitor = 2;
+        let number_of_locale_monitors = 2;
+        let number_of_distant_monitors = 1;
+        let monitor_map = DistributionService::group_monitors(own_monitor, foreign_monitors);
+
+        // Choose locale monitors
+        let mut locale_monitors = monitor_map
+            .get(own_monitor.bound.first().unwrap())
+            .unwrap()
+            .iter()
+            .choose_multiple(&mut thread_rng(), number_of_locale_monitors);
+
+        if !locale_monitors.contains(&own_monitor) {
+            locale_monitors.pop();
+            locale_monitors.push(own_monitor);
+        }
+
+        // Choose distant monitors
+        let distant_region = distant_relations
+            .get(own_monitor.bound.first().unwrap())
+            .unwrap();
+        let distant_monitors = monitor_map
+            .get(distant_region)
+            .unwrap()
+            .iter()
+            .choose_multiple(&mut thread_rng(), number_of_distant_monitors);
+
+        let mut choosen_monitors: Vec<&Monitor> = Vec::new();
+        choosen_monitors.extend(locale_monitors.iter());
+        choosen_monitors.extend(distant_monitors.iter());
+
+        for monitor in choosen_monitors {
+            info!(
+                "Distributing {} to [{}]{}",
+                hash,
+                monitor.bound.first().unwrap(),
+                monitor.addr
+            );
+
+            let distribution_request = DistributionRequest {
+                fingerprint: String::from(own_fingerprint),
+                to_own_monitor: monitor.addr == own_monitor.addr,
+                replications: replications_per_monitor,
+            };
+
+            if let Err(err) =
+                distribute_to_monitor(&hash, &monitor.addr, &distribution_request).await
+            {
+                error!("{}", err);
+            }
+        }
+    }
+
+    fn group_monitors(
+        own_monitor: &Monitor,
+        monitors: &Vec<Monitor>,
+    ) -> HashMap<String, Vec<Monitor>> {
+        let mut monitor_map: HashMap<String, Vec<Monitor>> = HashMap::new();
+        monitor_map
+            .entry(String::from(own_monitor.bound.get(0).unwrap()))
+            .or_insert(vec![])
+            .push(own_monitor.clone());
+
+        // Group monitors by bounds
+        for monitor in monitors {
+            let key = String::from(monitor.bound.get(0).unwrap());
+            monitor_map
+                .entry(key)
+                .or_insert(vec![])
+                .push(monitor.clone());
+        }
+
+        return monitor_map;
     }
 }
