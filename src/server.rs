@@ -80,7 +80,7 @@ async fn download(hash: String, state: Arc<AppState>) -> Result<impl warp::Reply
                 .header("Content-Type", &file_entry.content_type)
                 .header(
                     "Content-Disposition",
-                    format!(":attachment; filename='{}'", &file_entry.file_name),
+                    format!(":attachment; filename={}", &file_entry.file_name),
                 )
                 .body(file_entry.content().unwrap())
                 .unwrap();
@@ -168,10 +168,8 @@ async fn lookup(hash: String, state: Arc<AppState>) -> Result<impl warp::Reply, 
     }
 
     // Hash not found
-    let empty_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    let reply = warp::reply::json(&empty_map);
     return Ok(warp::reply::with_status(
-        reply,
+        empty_reply(),
         warp::http::StatusCode::NOT_FOUND,
     ));
 }
@@ -181,20 +179,45 @@ async fn upload_multipart_fun(
     state: Arc<AppState>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     while let Some(Ok(field)) = data.next().await {
+        // Process uploaded data
         let mut part: warp::multipart::Part = field;
         let mut buf = part.data().await.unwrap().unwrap();
         let binary_vec = buf.to_bytes().to_vec();
-
         let content_type = part
             .content_type()
             .or(Some("application/octet-stream"))
             .unwrap();
 
+        // Check if hash already exists on other nodes
+        let hash = state.config_store.write().unwrap().hash_content(binary_vec.as_slice());
+        if let Some(_) = state.file_store.read().unwrap().get_file(&hash) {
+            error!("Uploaded file with hahs {} already exists!", &hash);
+            return Ok(warp::reply::with_status(
+                empty_reply(),
+                warp::http::StatusCode::CONFLICT
+            ));
+        }
+
+        let monitor = state.config_store.read().unwrap().monitor();
+        if let Ok(_) = lookup_hash_on_monitor(&hash, &monitor.addr).await {
+            error!("Uploaded file with hahs {} already exists!", &hash);
+            return Ok(warp::reply::with_status(
+                empty_reply(),
+                warp::http::StatusCode::CONFLICT
+            ));
+        }
+
+
         let filename = part.filename().or(Some("unknown")).unwrap();
         state.add_new_file(binary_vec.as_slice(), content_type, filename, true);
     }
     return Ok(warp::reply::with_status(
-        warp::reply::json(&String::from("lol")),
+        warp::reply::json(&String::from("uploaded")),
         warp::http::StatusCode::OK,
     ));
+}
+
+fn empty_reply() -> warp::reply::Json {
+    let empty_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    warp::reply::json(&empty_map)
 }
