@@ -26,7 +26,7 @@ pub async fn register_on_manager(
     manager_addr: &str,
     register_request: RegisterRequest,
 ) -> Result<RegisterResponse, reqwest::Error> {
-    let url = format!("{}/register/node", manager_addr);
+    let url = format!("{}/api/register/node", manager_addr);
     let response = reqwest::Client::new()
         .post(&url)
         .json(&register_request)
