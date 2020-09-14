@@ -24,6 +24,20 @@ pub async fn start_server(
     let port = app_state.config_store.read().unwrap().port();
     let state_filter = warp::any().map(move || app_state.clone());
 
+    let cors = warp::cors()
+        .allow_any_origin()
+        .allow_headers(vec![
+            "User-Agent",
+            "Sec-Fetch-Mode",
+            "Referer",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers",
+            "content-type",
+            "x-csrf-token",
+        ])
+        .allow_methods(vec!["POST", "GET", "DELETE"]);
+
     let download_hash = warp::get()
         .and(warp::path("download"))
         .and(warp::path::param::<String>())
@@ -53,7 +67,10 @@ pub async fn start_server(
         .and(state_filter.clone())
         .and_then(upload_multipart_fun);
 
-    let routes = download_hash.or(lookup_hash).or(upload_multipart);
+    let routes = download_hash
+        .or(lookup_hash)
+        .or(upload_multipart)
+        .with(cors);
     let (addr, server) =
         warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], port), async {
             receiver.await.ok();
