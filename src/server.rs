@@ -7,9 +7,11 @@ use bytes::buf::Buf;
 use futures::stream::StreamExt;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use warp::Filter;
+
 #[derive(Serialize)]
 struct JsonResponse {
     status: String,
@@ -44,17 +46,6 @@ pub async fn start_server(
         .and(state_filter.clone())
         .and_then(download);
 
-    // let download_hash = warp::get()
-    //     .and(warp::path("download"))
-    //     .and(warp::fs::dir(file_dir));
-
-    // let upload_file = warp::post()
-    //     .and(warp::path("upload"))
-    //     .and(warp::body::json())
-    //     .and(warp::query::<UploadRequestQuery>())
-    //     .and(state_filter.clone())
-    //     .and_then(upload);
-
     let lookup_hash = warp::get()
         .and(warp::path("lookup"))
         .and(warp::path::param::<String>())
@@ -63,7 +54,7 @@ pub async fn start_server(
 
     let upload_multipart = warp::post()
         .and(warp::path("upload"))
-        .and(warp::filters::multipart::form())
+        .and(warp::filters::multipart::form().max_length(1024 * 1024 * 10))
         .and(state_filter.clone())
         .and_then(upload_multipart_fun);
 
@@ -122,41 +113,6 @@ async fn download(hash: String, state: Arc<AppState>) -> Result<impl warp::Reply
     }
 }
 
-// #[derive(Deserialize)]
-// struct UploadRequest {
-//     content: String,
-// }
-#[derive(Serialize)]
-struct UploadResponse {
-    hash: String,
-    content: String,
-}
-#[derive(Serialize, Deserialize)]
-struct UploadRequestQuery {
-    distribute: bool,
-}
-// async fn upload(
-//     upload_request: UploadRequest,
-//     _query: UploadRequestQuery,
-//     state: Arc<AppState>,
-// ) -> Result<impl warp::Reply, warp::Rejection> {
-//     if state.file_store.read().unwrap().capacity_left() <= 0 {
-//         let empty_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-//         let reply = warp::reply::json(&empty_map);
-//         return Ok(warp::reply::with_status(
-//             reply,
-//             warp::http::StatusCode::CONFLICT,
-//         ));
-//     }
-
-//     let content = upload_request.content.clone();
-//     let hash = state.add_new_file(&content, true);
-
-//     let response = UploadResponse { hash, content };
-//     let reply = warp::reply::json(&response);
-//     Ok(warp::reply::with_status(reply, warp::http::StatusCode::OK))
-// }
-
 #[derive(Serialize)]
 struct LookupResponse {
     hash: String,
@@ -195,43 +151,53 @@ async fn upload_multipart_fun(
     mut data: warp::filters::multipart::FormData,
     state: Arc<AppState>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    while let Some(Ok(field)) = data.next().await {
+    let mut query = String::from("status=error");
+
+    while let Some(Ok(mut part)) = data.next().await {
         // Process uploaded data
-        let mut part: warp::multipart::Part = field;
-        let mut buf = part.data().await.unwrap().unwrap();
-        let binary_vec = buf.to_bytes().to_vec();
-        let content_type = part
-            .content_type()
-            .or(Some("application/octet-stream"))
-            .unwrap();
+        if part.name() == "upload[data]" {
+            let mut buf = part.data().await.unwrap().unwrap();
+            let binary_vec = buf.to_bytes().to_vec();
+            let content_type = part
+                .content_type()
+                .or(Some("application/octet-stream"))
+                .unwrap();
 
-        // Check if hash already exists on other nodes
-        let hash = state.config_store.write().unwrap().hash_content(binary_vec.as_slice());
-        if let Some(_) = state.file_store.read().unwrap().get_file(&hash) {
-            error!("Uploaded file with hahs {} already exists!", &hash);
-            return Ok(warp::reply::with_status(
-                empty_reply(),
-                warp::http::StatusCode::CONFLICT
-            ));
+            // Check if hash already exists on other nodes
+            // let hash = state
+            //     .config_store
+            //     .write()
+            //     .unwrap()
+            //     .hash_content(binary_vec.as_slice());
+            // if let Some(_) = state.file_store.read().unwrap().get_file(&hash) {
+            //     error!("Uploaded file with hahs {} already exists!", &hash);
+            //     return Ok(warp::reply::with_status(
+            //         empty_reply(),
+            //         warp::http::StatusCode::CONFLICT,
+            //     ));
+            // }
+
+            // let monitor = state.config_store.read().unwrap().monitor();
+            // if let Ok(_) = lookup_hash_on_monitor(&hash, &monitor.addr).await {
+            //     error!("Uploaded file with hahs {} already exists!", &hash);
+            //     return Ok(warp::reply::with_status(
+            //         warp::reply(),
+            //         warp::http::StatusCode::CONFLICT,
+            //     ));
+            // }
+
+            let filename = part.filename().or(Some("unknown")).unwrap();
+            let hash = state.add_new_file(binary_vec.as_slice(), content_type, filename, true);
+            query = format!("status=success&hash={}", hash);
         }
-
-        let monitor = state.config_store.read().unwrap().monitor();
-        if let Ok(_) = lookup_hash_on_monitor(&hash, &monitor.addr).await {
-            error!("Uploaded file with hahs {} already exists!", &hash);
-            return Ok(warp::reply::with_status(
-                empty_reply(),
-                warp::http::StatusCode::CONFLICT
-            ));
-        }
-
-
-        let filename = part.filename().or(Some("unknown")).unwrap();
-        state.add_new_file(binary_vec.as_slice(), content_type, filename, true);
     }
-    return Ok(warp::reply::with_status(
-        warp::reply::json(&String::from("uploaded")),
-        warp::http::StatusCode::OK,
-    ));
+
+    let manager_addr = state.config_store.read().unwrap().manager();
+    let addr = format!("{}?{}", manager_addr, query);
+    let uri = warp::http::Uri::from_str(&addr).unwrap();
+
+    info!("Sending reply");
+    return Ok(warp::redirect(uri));
 }
 
 fn empty_reply() -> warp::reply::Json {
