@@ -8,7 +8,8 @@ pub struct ConfigFromFile {
 }
 
 pub fn parse_config(path: &str) -> ConfigFromFile {
-    let data = std::fs::read_to_string(path).expect("Unable to read file");
+    let complete_path = format!("{}/config.json", path);
+    let data = std::fs::read_to_string(&complete_path).expect("Unable to read file");
     let config: ConfigFromFile = serde_json::from_str(&data).expect("JSON was not well-formatted");
     return config;
 }

@@ -47,6 +47,7 @@ impl StatStoreFunc for StatStore {
 
         StatStore { stats, path }
     }
+
     fn total_rating(&self, capacity_left: u64) -> f32 {
         let ratings = vec![
             self.connection_rating(),
@@ -156,9 +157,9 @@ impl StatStoreFunc for StatStore {
         let _ = file.write_all(serialized.as_bytes());
     }
 
-    fn deserialize_state(fingerprint: &str) -> Stats {
-        let path = format!("./state/{}/stat_state.json", fingerprint);
-        let data = std::fs::read_to_string(path).expect("Unable to read file");
+    fn deserialize_state(path: &str) -> Stats {
+        let complete_path = format!("{}/stat_state.json", path);
+        let data = std::fs::read_to_string(complete_path).expect("Unable to read file");
         let config: Stats = serde_json::from_str(&data).expect("JSON was not well-formatted");
         return config;
     }

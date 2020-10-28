@@ -44,9 +44,9 @@ async fn main() -> std::io::Result<()> {
 
     // Read config from file
     let args: Vec<String> = env::args().collect();
-    let config_path: &String = &args[1].parse::<String>().unwrap();
-    let config_from_file = config::parse_config(config_path);
-    let stats = stat_store::StatStore::deserialize_state(&config_from_file.fingerprint);
+    let state_path: &String = &args[1].parse::<String>().unwrap();
+    let config_from_file = config::parse_config(state_path);
+    let stats = stat_store::StatStore::deserialize_state(state_path);
 
     // Register on manager
     let register_response = run_registration(&config_from_file.manager_addr, &stats).await;
@@ -61,6 +61,7 @@ async fn main() -> std::io::Result<()> {
         register_response.monitors,
         stop_services.clone(),
         force_ping.clone(),
+        state_path
     ));
     info!(
         "Region: {}",
