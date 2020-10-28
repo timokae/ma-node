@@ -34,6 +34,8 @@ impl PingService {
 
                     let _ = PingService::ping_monitor(self.app_state.clone()).await;
 
+                self.app_state.serialize_state();
+
                     force_ping.swap(false, Ordering::Relaxed);
 
                     last_ping = std::time::Instant::now();
