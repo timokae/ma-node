@@ -44,7 +44,7 @@ impl DistributionService {
                     .next_file_to_distribute();
 
                 if let Some(hash) = hash_opt {
-                    DistributionService::region_based_distribution(
+                    DistributionService::simple_distribution(
                         &own_fingerprint,
                         &own_monitor,
                         &foreign_monitors,
@@ -121,12 +121,15 @@ impl DistributionService {
         hash: &str,
     ) {
         let replications_per_monitor = 2;
+        let monitor_per_partition = 1;
 
         let monitor_map = DistributionService::group_monitors(own_monitor, foreign_monitors);
 
         // Iterate over each monitor group
         for (bound, monitor_vec) in monitor_map.iter() {
-            let mut choosen_monitors = monitor_vec.iter().choose_multiple(&mut thread_rng(), 1);
+            let mut choosen_monitors = monitor_vec
+                .iter()
+                .choose_multiple(&mut thread_rng(), monitor_per_partition);
 
             // Make sure that hashes get distributed to the own monitor
             if bound == own_monitor.bound.first().unwrap()

@@ -38,12 +38,12 @@ impl PingService {
 
                     last_ping = std::time::Instant::now();
                 } else {
-                    std::thread::sleep(Duration::from_secs(1));
-                }
+                    if stop_services.load(Ordering::Relaxed) {
+                        info!("Shutting down ping service");
+                        break;
+                    }
 
-                if stop_services.load(Ordering::Relaxed) {
-                    info!("Shutting down ping service");
-                    break;
+                    std::thread::sleep(Duration::from_secs(1));
                 }
             }
         })

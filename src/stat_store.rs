@@ -48,11 +48,15 @@ impl StatStoreFunc for StatStore {
         StatStore { stats, path }
     }
     fn total_rating(&self, capacity_left: u64) -> f32 {
-        self.connection_rating()
-            + self.capacity_rating(capacity_left)
-            + self.uptime_rating()
-            + self.uptime_left_rating()
-            + self.uptime_count_rating()
+        let ratings = vec![
+            self.connection_rating(),
+            self.capacity_rating(capacity_left),
+            // self.uptime_rating(),
+            // self.uptime_left_rating(),
+            self.uptime_count_rating(),
+        ];
+
+        return ratings.iter().sum();
     }
 
     fn connection_rating(&self) -> f32 {
