@@ -36,14 +36,14 @@ Create a new directory
 mkdir run
 ```
 
-Download a binary from Github 
+Download the binary for your operating system (mac/linux) from Github 
 https://github.com/timokae/ma-node/releases/latest and place the binary file inside the created folder `run` and rename the binary to `node-app`
 
-If you want to build the binary yourself
+If you want to build the binary yourself. Inside the `ma-node` folder
 1. Run `cargo build --release`
-2. Copy the binary into the app folder `cp target/release/node-app run`
+2. Copy the binary into the run folder `cp target/release/node-app run`
 
-Copy the state folder to the run directory with
+Copy the state folder into the `run` directory with
 ```bash
 cp -rf state run/
 ```
@@ -68,8 +68,8 @@ $ tree
 ```
 
 In `state/config.json`
-- change the `fingerprint` to a unique name, for example a the first to letters of your name with some random numbers. But it has to be string!
-- (optional) change the `port` to the port the node should be running on. It must be visible from outside your network!
+- change the `fingerprint` to a unique name, for example a the first to letters of your name with some random numbers. It has to be string!
+- (optional) change the `port` property to the port the node should be running on. It must be visible from outside your network, for example by port forwarding!
 
 In `state/stat_state.json` change the values of
 - `uptime`: Time of the day your computer is usually online.  As an example, if your online from 8:00 to 12:00, insert [8, 12], 
@@ -119,6 +119,11 @@ If everything was done correctly, you should see something close to his
 [INFO][2020-10-28 15:15:17] Starting recover service
 [INFO][2020-10-28 15:15:17] Starting distribution service
 ```
+
+## Using the network
+To Upload a file, open `http://manager.peerdata.9e-staging.cloud/` in your browser. Use the form to select a file from your computer. By submitting the form, the file gets uploaded to a node. The node then replicates the data. After your upload the manager shows your the hash of your file. Keep this hash if you want to download your later later.
+
+To download the file visit `http://manager.peerdata.9e-staging.cloud/download`. Enter the hash of the file you want to download. The manager then searches for your file in the network. If a node with the given hash is reachable, the download starts automatically.
 
 ## Troubleshooting
 
