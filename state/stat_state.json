@@ -1,0 +1,8 @@
+{
+  "first_online": 0,
+  "region": "europe",
+  "uptime": { "value": [10, 16], "weight": 0.2 },
+  "capacity": { "value": 100000000, "weight": 0.3 },
+  "connection": { "value": 120000, "weight": 0.2 },
+  "uptime_counter": { "value": 0, "weight": 0.5 }
+}

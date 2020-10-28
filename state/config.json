@@ -1,0 +1,5 @@
+{
+  "fingerprint": "INSERT UNIQUE NAME HERE",
+  "port": 8080,
+  "manager_addr": "http://manager.peerdata.9e-staging.cloud"
+}

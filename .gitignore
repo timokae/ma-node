@@ -1,4 +1,7 @@
 /target
-/state
+/state_old
+/files
 client.db
 /.vscode
+/node-app-01
+*.zip
