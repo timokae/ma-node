@@ -58,9 +58,12 @@ pub async fn start_server(
         .and(state_filter.clone())
         .and_then(upload_multipart_fun);
 
+    let ping = warp::get().and(warp::path("ping")).and_then(ping_fun);
+
     let routes = download_hash
         .or(lookup_hash)
         .or(upload_multipart)
+        .or(ping)
         .with(cors);
     let (addr, server) =
         warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], port), async {
@@ -198,6 +201,13 @@ async fn upload_multipart_fun(
 
     info!("Sending reply");
     return Ok(warp::redirect(uri));
+}
+
+async fn ping_fun() -> Result<impl warp::Reply, warp::Rejection> {
+    Ok(warp::reply::with_status(
+        String::from("pong"),
+        warp::http::StatusCode::OK,
+    ))
 }
 
 fn empty_reply() -> warp::reply::Json {

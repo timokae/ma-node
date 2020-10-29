@@ -21,6 +21,7 @@ impl RegisterRequest {
 pub struct RegisterResponse {
     pub own_monitor: Monitor,
     pub monitors: Vec<Monitor>,
+    pub addr: String,
 }
 pub async fn register_on_manager(
     manager_addr: &str,

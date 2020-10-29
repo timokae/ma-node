@@ -51,7 +51,12 @@ async fn main() -> std::io::Result<()> {
     // Register on manager
     let register_response = run_registration(&config_from_file.manager_addr, &stats).await;
     let monitor_addr = String::from(&register_response.own_monitor.addr);
+
     info!("Assigned to monitor on address {}", monitor_addr);
+    info!(
+        "Node registered with address {}:{}",
+        &register_response.addr, config_from_file.port
+    );
 
     // Create appstate
     let app_state = Arc::new(AppState::new(
@@ -61,7 +66,7 @@ async fn main() -> std::io::Result<()> {
         register_response.monitors,
         stop_services.clone(),
         force_ping.clone(),
-        state_path
+        state_path,
     ));
     info!(
         "Region: {}",
