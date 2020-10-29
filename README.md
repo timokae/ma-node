@@ -3,6 +3,12 @@
 
 The node was tested and build with version **1.47.0** (18bf6b4f0 2020-10-07) of the rust programming language.
 
+---
+
+**If you wish to build the binary yourself you need rust installed with the version above. If not, skip this section and continue with the section Installation.**
+
+---
+
 If you don't have rust installed follow the instruction on https://www.rust-lang.org/tools/install to install rust on your system.
 
 After you installed Rust run 
@@ -21,7 +27,7 @@ rustup update
 ```
 
 ## Installation
-Clone this repository to a preferred location.
+Clone the repository to a preferred location.
 ```bash
 git clone https://github.com/timokae/ma-node.git
 ```
@@ -111,6 +117,7 @@ To start the node run
 If everything was done correctly, you should see something close to his
 ```bash
 [INFO][2020-10-28 15:15:17] Assigned to monitor on address http://167.99.248.254
+[INFO][2020-10-28 15:15:17] Node registered with address 45.138.43.136:8082
 [INFO][2020-10-28 15:15:17] FileStore initialized: []
 [INFO][2020-10-28 15:15:17] Region: europe
 [INFO][2020-10-28 15:15:17] Services started
@@ -119,6 +126,14 @@ If everything was done correctly, you should see something close to his
 [INFO][2020-10-28 15:15:17] Starting recover service
 [INFO][2020-10-28 15:15:17] Starting distribution service
 ```
+
+To tets if other node can talk to your node, copy the the address from line two from the output above. In this case `45.138.43.136:8082` and append the path `ping` like this
+```
+http://45.138.43.136:8080/ping
+```
+Open this URL in your browser. If everything works fine, your node should respond with `pong`. 
+
+Otherwise check your settings for exposing your local machine. If your computer is not reachable, other devices are not able to download files from your node.
 
 ## Using the network
 To Upload a file, open `http://manager.peerdata.9e-staging.cloud/` in your browser. Use the form to select a file from your computer. By submitting the form, the file gets uploaded to a node. The node then replicates the data. After your upload the manager shows your the hash of your file. Keep this hash if you want to download your later later.
