@@ -42,13 +42,17 @@ Create a new directory
 mkdir run
 ```
 
+### Binary
 Download the binary for your operating system (mac/linux) from Github 
 https://github.com/timokae/ma-node/releases/latest and place the binary file inside the created folder `run` and rename the binary to `node-app`
 
+### Build yourself
 If you want to build the binary yourself. Inside the `ma-node` folder
 1. Run `cargo build --release`
 2. Copy the binary into the run folder `cp target/release/node-app run`
 
+
+## Configuration
 Move the state folder into the `run` directory with
 ```bash
 mv state run/
@@ -58,8 +62,6 @@ Go into the `run` directory
 ```bash
 cd run
 ```
-
-## Configuration
 
 The directory `run` should look like this now
 ```bash
@@ -127,7 +129,7 @@ If everything was done correctly, you should see something close to his
 [INFO][2020-10-28 15:15:17] Starting distribution service
 ```
 
-To tets if other node can talk to your node, copy the the address from line two from the output above. In this case `45.138.43.136:8082` and append the path `ping` like this
+To test if other node can talk to your node, copy the the address from line two from the output above. In this case `45.138.43.136:8082` and append the path `ping` like this
 ```
 http://45.138.43.136:8080/ping
 ```
