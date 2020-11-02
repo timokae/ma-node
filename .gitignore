@@ -5,3 +5,4 @@ client.db
 /.vscode
 /node-app-01
 *.zip
+/run
