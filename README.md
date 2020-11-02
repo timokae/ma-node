@@ -49,9 +49,9 @@ If you want to build the binary yourself. Inside the `ma-node` folder
 1. Run `cargo build --release`
 2. Copy the binary into the run folder `cp target/release/node-app run`
 
-Copy the state folder into the `run` directory with
+Move the state folder into the `run` directory with
 ```bash
-cp -rf state run/
+mv state run/
 ```
 
 Go into the `run` directory
