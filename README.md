@@ -82,7 +82,7 @@ In `state/config.json`
 In `state/stat_state.json` change the values of
 - `uptime`: Time of the day your computer is usually online.  As an example, if your online from 8:00 to 12:00, insert [8, 12], 
 - `capacity`: Amount of space you want to offer to the network (in bytes).
-- `connection`: Bandwidth of your internet connection (in bits/s)
+- `connection`: Bandwidth of your internet connection (download in bits/s)
   
 Do no change `first_online`, `region` and `uptime`!
 
@@ -109,7 +109,22 @@ state/stat_store.json
 }
 ```
 
+## IPv6 Support
+
+If your provider is using IPv6 lite or something similar, you can add the following line to `state/config`
+```json
+{
+  ...
+  "ipv6": "YOUR IPv6 ADDRESS"
+}
+```
+This tells the monitor to save and use your IPv6 address
+
 ## Starting the node
+Make the binary executable with
+```bash
+chmod +x node-app
+```
 
 To start the node run
 ```bash
@@ -138,7 +153,7 @@ Open this URL in your browser. If everything works fine, your node should respon
 Otherwise check your settings for exposing your local machine. If your computer is not reachable, other devices are not able to download files from your node.
 
 ## Using the network
-To Upload a file, open `http://manager.peerdata.9e-staging.cloud/` in your browser. Use the form to select a file from your computer. By submitting the form, the file gets uploaded to a node. The node then replicates the data. After your upload the manager shows your the hash of your file. Keep this hash if you want to download your later later.
+To Upload a file, open `http://manager.peerdata.9e-staging.cloud/` in your browser. Use the form to select a file from your computer. By submitting the form, the file gets uploaded to a node. The node then replicates the data. After your upload the manager shows you the hash of your file. Keep this hash if you want to download your file later.
 
 To download the file visit `http://manager.peerdata.9e-staging.cloud/download`. Enter the hash of the file you want to download. The manager then searches for your file in the network. If a node with the given hash is reachable, the download starts automatically.
 

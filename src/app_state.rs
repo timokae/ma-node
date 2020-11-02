@@ -13,7 +13,8 @@ pub struct Ping {
     pub files: Vec<String>,
     pub rejected_hashes: Vec<String>,
     pub capacity_left: u64,
-    pub uploaded_hashes: Vec<String>
+    pub uploaded_hashes: Vec<String>,
+    pub ipv6: Option<String>,
 }
 
 pub struct AppState {
@@ -32,9 +33,8 @@ impl AppState {
         monitors: Vec<Monitor>,
         stop_services: Arc<AtomicBool>,
         force_ping: Arc<AtomicBool>,
-        path: &str
+        path: &str,
     ) -> AppState {
-
         let file_store = RwLock::new(FileStore::new(stats.capacity.value, &path));
         let config_store = RwLock::new(ConfigStore::new(
             &config.manager_addr,
@@ -42,6 +42,7 @@ impl AppState {
             monitors,
             config.port,
             &config.fingerprint,
+            config.ipv6,
         ));
         let stat_store = RwLock::new(StatStore::new(stats, String::from(path)));
 
@@ -67,6 +68,7 @@ impl AppState {
             capacity_left,
             rejected_hashes: self.file_store.read().unwrap().rejected_hashes(),
             uploaded_hashes: self.file_store.read().unwrap().uploaded_hashes(),
+            ipv6: self.config_store.read().unwrap().ipv6.clone(),
         };
 
         self.file_store.write().unwrap().clear_uploaded_hashes();

@@ -65,10 +65,11 @@ pub async fn start_server(
         .or(upload_multipart)
         .or(ping)
         .with(cors);
-    let (addr, server) =
-        warp::serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], port), async {
-            receiver.await.ok();
-        });
+
+    let addr = std::net::Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0);
+    let (addr, server) = warp::serve(routes).bind_with_graceful_shutdown((addr, port), async {
+        receiver.await.ok();
+    });
 
     info!("Startet server on {}", addr);
     tokio::task::spawn(server).await.unwrap();

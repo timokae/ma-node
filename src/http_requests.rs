@@ -8,12 +8,14 @@ use serde::{Deserialize, Serialize};
 pub struct RegisterRequest {
     pub region: String,
     pub uptime: Vec<u32>,
+    pub ipv6: Option<String>,
 }
 impl RegisterRequest {
-    pub fn from_stats(stats: &Stats) -> RegisterRequest {
+    pub fn from_stats(stats: &Stats, ipv6: Option<String>) -> RegisterRequest {
         RegisterRequest {
             region: stats.region.clone(),
             uptime: stats.uptime.value.clone(),
+            ipv6,
         }
     }
 }

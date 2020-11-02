@@ -49,13 +49,18 @@ async fn main() -> std::io::Result<()> {
     let stats = stat_store::StatStore::deserialize_state(state_path);
 
     // Register on manager
-    let register_response = run_registration(&config_from_file.manager_addr, &stats).await;
+    let register_response = run_registration(
+        &config_from_file.manager_addr,
+        &stats,
+        config_from_file.ipv6.clone(),
+    )
+    .await;
     let monitor_addr = String::from(&register_response.own_monitor.addr);
 
     info!("Assigned to monitor on address {}", monitor_addr);
     info!(
         "Node registered with address {}:{}",
-        &register_response.addr, config_from_file.port
+        &register_response.addr, &config_from_file.port
     );
 
     // Create appstate
@@ -132,10 +137,13 @@ fn setup_close_handler(keep_running: Arc<AtomicBool>, sender: oneshot::Sender<()
     .expect("Error setting Ctrl-C handler");
 }
 
-async fn run_registration(manager_addr: &str, stats: &stat_store::Stats) -> RegisterResponse {
-    let register_request = http_requests::RegisterRequest::from_stats(&stats);
+async fn run_registration(
+    manager_addr: &str,
+    stats: &stat_store::Stats,
+    ipv6: Option<String>,
+) -> RegisterResponse {
+    let register_request = http_requests::RegisterRequest::from_stats(&stats, ipv6);
     let response = register_on_manager(&manager_addr, register_request).await;
-
     match response {
         Ok(result) => result,
         Err(err) => panic!("{}", err),

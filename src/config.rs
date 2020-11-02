@@ -5,6 +5,7 @@ pub struct ConfigFromFile {
     pub fingerprint: String,
     pub port: u16,
     pub manager_addr: String,
+    pub ipv6: Option<String>,
 }
 
 pub fn parse_config(path: &str) -> ConfigFromFile {

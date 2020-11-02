@@ -7,6 +7,7 @@ pub struct ConfigStore {
     monitors: Vec<Monitor>,
     port: u16,
     fingerprint: String,
+    pub ipv6: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -28,6 +29,7 @@ pub trait ConfigStoreFunc {
         monitors: Vec<Monitor>,
         port: u16,
         fingerprint: &str,
+        ipv6: Option<String>,
     ) -> ConfigStore;
     fn monitor(&self) -> Monitor;
     fn monitors(&self) -> Vec<Monitor>;
@@ -44,6 +46,7 @@ impl ConfigStoreFunc for ConfigStore {
         monitors: Vec<Monitor>,
         port: u16,
         fingerprint: &str,
+        ipv6: Option<String>,
     ) -> ConfigStore {
         ConfigStore {
             manager_addr: String::from(manager_addr),
@@ -51,6 +54,7 @@ impl ConfigStoreFunc for ConfigStore {
             monitors,
             port,
             fingerprint: String::from(fingerprint),
+            ipv6,
         }
     }
 
