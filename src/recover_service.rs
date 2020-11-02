@@ -23,7 +23,7 @@ impl RecoverService {
                 .read()
                 .unwrap()
                 .monitor();
-            info!("Starting recover service");
+            info!("Recover service started");
 
             let stop_services = self.app_state.stop_services.clone();
 

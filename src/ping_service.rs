@@ -17,7 +17,7 @@ pub struct PingService {
 impl PingService {
     pub async fn start(self) -> std::io::Result<()> {
         tokio::spawn(async move {
-            info!("Starting ping service.");
+            info!("Ping service started");
             let mut last_ping = std::time::Instant::now();
             let stop_services = self.app_state.stop_services.clone();
             let force_ping = self.app_state.force_ping.clone();

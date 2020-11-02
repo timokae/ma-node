@@ -31,7 +31,7 @@ impl DistributionService {
                 .filter(|m| m.addr != own_monitor.addr)
                 .collect();
 
-            info!("Starting distribution service");
+            info!("Distribution Service started");
 
             let stop_services = self.app_state.stop_services.clone();
 
