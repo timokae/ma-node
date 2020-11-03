@@ -80,7 +80,7 @@ impl DistributionService {
         foreign_monitors: &Vec<Monitor>,
         hash: &str,
     ) {
-        let replications = 2;
+        let replications = 3;
 
         // Distribute to own monitor
         let own_distribution_request = DistributionRequest {
