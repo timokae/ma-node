@@ -56,9 +56,9 @@ If you want to build the binary yourself. Inside the `ma-node` folder
 
 
 ## Configuration
-Move the state folder into the `run` directory with
+Copy the state example folder into the `run` directory with
 ```bash
-mv state run/
+cp -R state_example/ run/state
 ```
 
 Go into the `run` directory
