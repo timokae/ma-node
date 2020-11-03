@@ -6,3 +6,6 @@ client.db
 /node-app-01
 *.zip
 /run
+/state
+/releases
+/state_example
