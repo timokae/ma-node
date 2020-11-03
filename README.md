@@ -1,13 +1,16 @@
 # Node App
 ## Requirements
 
-The node was tested and build with version **1.47.0** (18bf6b4f0 2020-10-07) of the rust programming language.
+### Network
+The application needs to be visible from outside your local network. Therefore expose a port of your choice in your router. Otherwise nodes in the network are not able to download files from your computer!
 
----
+### Rust
 
 **If you wish to build the binary yourself you need rust installed with the version above. If not, skip this section and continue with the section Installation.**
 
 ---
+
+The node was tested and build with version **1.47.0** (18bf6b4f0 2020-10-07) of the rust programming language.
 
 If you don't have rust installed follow the instruction on https://www.rust-lang.org/tools/install to install rust on your system.
 
