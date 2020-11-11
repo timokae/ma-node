@@ -87,7 +87,7 @@ In `state/stat_state.json` change the values of
 - `capacity`: Amount of space you want to offer to the network (in bytes).
 - `connection`: Bandwidth of your internet connection (download in bits/s)
   
-Do no change `first_online`, `region` and `uptime`!
+Do no change `first_online`, `region` and `uptime_counter`!
 
 The files should look like this, with your input instead
 
