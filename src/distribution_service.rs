@@ -74,6 +74,46 @@ impl DistributionService {
     }
 
     #[allow(dead_code)]
+    async fn non_prioritized_distribution(
+        own_fingerprint: &str,
+        own_monitor: &Monitor,
+        foreign_monitors: &Vec<Monitor>,
+        hash: &str,
+    ) {
+        let replications = -1;
+
+         // Distribute to own monitor
+         let own_distribution_request = DistributionRequest {
+            fingerprint: String::from(own_fingerprint),
+            to_own_monitor: true,
+            replications,
+        };
+
+        info!("Distributing {} to own monitor {}", hash, own_monitor.addr);
+        if let Err(err) =
+            distribute_to_monitor(&hash, &own_monitor.addr, &own_distribution_request).await
+        {
+            error!("{}", err);
+        }
+
+        // Distribute to foreign monitors
+        for monitor in foreign_monitors {
+            info!("Distributing {} to monitor {}", hash, monitor.addr);
+            let distribution_request = DistributionRequest {
+                fingerprint: String::from(own_fingerprint),
+                to_own_monitor: false,
+                replications,
+            };
+
+            if let Err(err) =
+                distribute_to_monitor(&hash, &monitor.addr, &distribution_request).await
+            {
+                error!("{}", err);
+            }
+        }
+    }
+
+    #[allow(dead_code)]
     async fn simple_distribution(
         own_fingerprint: &str,
         own_monitor: &Monitor,
