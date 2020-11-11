@@ -63,10 +63,13 @@ pub async fn lookup_hash_on_monitor(
     monitor_addr: &str,
 ) -> Result<LookupMonitorResponse, reqwest::Error> {
     let url = format!("{}/lookup/{}?forward=true", monitor_addr, hash);
-    let response = reqwest::Client::new().get(&url).send().await?;
+    let response = reqwest::Client::new().get(&url).send().await;
 
-    match response.error_for_status() {
-        Ok(res) => Ok(res.json::<LookupMonitorResponse>().await?),
+    match response {
+        Ok(response) => match response.error_for_status() {
+            Ok(res) => Ok(res.json::<LookupMonitorResponse>().await?),
+            Err(err) => Err(err),
+        },
         Err(err) => Err(err),
     }
 }
@@ -168,7 +171,7 @@ pub async fn notify_monitor_about_shutdown(
 
 #[derive(Serialize)]
 pub struct DistributionRequest {
-    pub replications: u32,
+    pub replications: i32,
     pub to_own_monitor: bool,
     pub fingerprint: String,
 }
