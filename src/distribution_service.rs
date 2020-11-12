@@ -9,6 +9,15 @@ use crate::config_store::{ConfigStoreFunc, Monitor};
 use crate::file_store::FileStoreFunc;
 use crate::http_requests::{distribute_to_monitor, DistributionRequest};
 
+/*
+ * DistributionService
+ * Looks for hashes to distribute in the AppState. If hash is stored for distribution,
+ * the service chooses a (sub-)set of monitors, sends a DistributionRequest to them
+ * and removes the hash from the queue in the AppState
+ * 
+ * timeout: The amount of time the service should wait if no hash is found in the queue.
+ */
+
 pub struct DistributionService {
     pub app_state: Arc<AppState>,
     pub timeout: u64,
@@ -20,6 +29,7 @@ impl DistributionService {
             let own_monitor = self.app_state.config_store.read().unwrap().monitor();
             let own_fingerprint = self.app_state.config_store.read().unwrap().fingerprint();
 
+            // Filter own monitor from monitors
             let foreign_monitors: Vec<Monitor> = self
                 .app_state
                 .config_store
@@ -36,6 +46,7 @@ impl DistributionService {
             let stop_services = self.app_state.stop_services.clone();
 
             loop {
+                // Get next entry in queue
                 let hash_opt = self
                     .app_state
                     .file_store
@@ -43,6 +54,7 @@ impl DistributionService {
                     .unwrap()
                     .next_file_to_distribute();
 
+                // If a hash is found, distribute it, otherwise send t hread to sleep
                 if let Some(hash) = hash_opt {
                     DistributionService::simple_distribution(
                         &own_fingerprint,
@@ -55,6 +67,7 @@ impl DistributionService {
                     std::thread::sleep(Duration::from_secs(self.timeout));
                 }
 
+                // If the flag is set, break out of the loop and exit thread
                 if stop_services.load(Ordering::Relaxed) {
                     info!("Shutting down distribution service");
                     break;
@@ -73,6 +86,7 @@ impl DistributionService {
         DistributionService { app_state, timeout }
     }
 
+    // Distribution of a hash to all nodes on all monitors
     #[allow(dead_code)]
     async fn non_prioritized_distribution(
         own_fingerprint: &str,
@@ -113,6 +127,7 @@ impl DistributionService {
         }
     }
 
+    // Distribution of a hash to n nodes on all monitors
     #[allow(dead_code)]
     async fn simple_distribution(
         own_fingerprint: &str,
@@ -153,6 +168,7 @@ impl DistributionService {
         }
     }
 
+    // Distribution of hash to n nodes of m monitors of all partitions
     #[allow(dead_code)]
     async fn region_based_distribution(
         own_fingerprint: &str,
@@ -163,9 +179,10 @@ impl DistributionService {
         let replications_per_monitor = 2;
         let monitor_per_partition = 1;
 
+        // Create group for every bound/partition found and put each monitor in its assigned partition
         let monitor_map = DistributionService::group_monitors(own_monitor, foreign_monitors);
 
-        // Iterate over each monitor group
+        // Iterate over each monitor group and select m monitors
         for (bound, monitor_vec) in monitor_map.iter() {
             let mut choosen_monitors = monitor_vec
                 .iter()
@@ -179,7 +196,7 @@ impl DistributionService {
                 choosen_monitors.push(own_monitor);
             }
 
-            // Iterate over monitors inside groups
+            // Iterate over monitors inside each group
             for monitor in choosen_monitors {
                 info!(
                     "Distributing {} to [{}]{}",
@@ -203,6 +220,8 @@ impl DistributionService {
         }
     }
 
+    // Distribution of a hash to n nodes to m monitors of own partition 
+    // and a foreign monitor
     #[allow(dead_code)]
     async fn locale_distribution(
         own_fingerprint: &str,
@@ -229,6 +248,7 @@ impl DistributionService {
             .iter()
             .choose_multiple(&mut thread_rng(), number_of_locale_monitors);
 
+        // Make sure own monitor is in locale monitors
         if !locale_monitors.contains(&own_monitor) {
             locale_monitors.pop();
             locale_monitors.push(own_monitor);
@@ -244,10 +264,12 @@ impl DistributionService {
             .iter()
             .choose_multiple(&mut thread_rng(), number_of_distant_monitors);
 
+        // Create one lsit of all selecte monitors
         let mut choosen_monitors: Vec<&Monitor> = Vec::new();
         choosen_monitors.extend(locale_monitors.iter());
         choosen_monitors.extend(distant_monitors.iter());
 
+        // Iterate over all monitors and send a DistributionRequest
         for monitor in choosen_monitors {
             info!(
                 "Distributing {} to [{}]{}",
@@ -270,6 +292,8 @@ impl DistributionService {
         }
     }
 
+    // Creates a Hashmap, with a key for every partition found 
+    // and store all monitors in their assigned partition
     fn group_monitors(
         own_monitor: &Monitor,
         monitors: &Vec<Monitor>,

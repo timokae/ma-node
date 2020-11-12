@@ -8,6 +8,7 @@ pub struct ConfigFromFile {
     pub ipv6: Option<String>,
 }
 
+// Read the config from a file for the given path
 pub fn parse_config(path: &str) -> ConfigFromFile {
     let complete_path = format!("{}/config.json", path);
     let data = std::fs::read_to_string(&complete_path).expect("Unable to read file");

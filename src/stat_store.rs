@@ -27,15 +27,15 @@ pub struct StatStore {
 
 pub trait StatStoreFunc {
     fn new(stats: Stats, path: String) -> StatStore;
-    fn total_rating(&self, capacity_left: u64) -> f32;
+    fn total_rating(&self, capacity_left: u64) -> f32;      // Returns the total weight of the node
     fn connection_rating(&self) -> f32;
     fn capacity_rating(&self, capacity_left: u64) -> f32;
     fn uptime_rating(&self) -> f32;
     fn uptime_left_rating(&self) -> f32;
     fn uptime_count_rating(&self) -> f32;
     fn increase_uptime_counter(&mut self, inc: u64);
-    fn serialize_state(&self);
-    fn deserialize_state(fingerprint: &str) -> Stats;
+    fn serialize_state(&self);                              // Save StatStore to disk
+    fn deserialize_state(path: &str) -> Stats;       // Read StatStore from disk
 }
 
 impl StatStoreFunc for StatStore {
@@ -78,11 +78,6 @@ impl StatStoreFunc for StatStore {
             speed_rating = 1.0;
         }
 
-        // error!(
-        //     "Connection Rating: {}",
-        //     speed_rating * self.stats.connection.weight,
-        // );
-
         return speed_rating * self.stats.connection.weight;
     }
 
@@ -90,11 +85,6 @@ impl StatStoreFunc for StatStore {
         let up = self.stats.uptime.value[0] as f32;
         let down = self.stats.uptime.value[1] as f32;
         let uptime_in_hours = down - up;
-
-        // error!(
-        //     "Uptime Rating: {}",
-        //     (uptime_in_hours / 24.0) * self.stats.uptime.weight,
-        // );
 
         (uptime_in_hours / 24.0) * self.stats.uptime.weight
     }
@@ -109,19 +99,10 @@ impl StatStoreFunc for StatStore {
                 .and_hms(self.stats.uptime.value[1], 0, 0);
         let minutes_left = down.signed_duration_since(now).num_minutes() as f32;
 
-        // error!(
-        //     "UptimeLeft Rating: {}",
-        //     (minutes_left / total_uptime_in_minutes) * self.stats.uptime.weight
-        // );
-
         (minutes_left / total_uptime_in_minutes) * self.stats.uptime.weight
     }
 
     fn capacity_rating(&self, capacity_left: u64) -> f32 {
-        // error!(
-        //     "Capacity Rating: {}",
-        //     (capacity_left as f32 / self.stats.capacity.value as f32) * self.stats.capacity.weight
-        // );
         (capacity_left as f32 / self.stats.capacity.value as f32) * self.stats.capacity.weight
     }
 
@@ -129,19 +110,10 @@ impl StatStoreFunc for StatStore {
         let now = chrono::Utc::now().timestamp() as u64;
         let total_seconds = now - self.stats.first_online;
 
-        // println!(
-        //     "Total {}, Counter {}",
-        //     total_seconds, self.stats.uptime_counter.value
-        // );
-
         if total_seconds == 0 {
             return 0.0;
         }
 
-        // println!(
-        //     "Result: {}",
-        //     self.stats.uptime_counter.value as f32 / total_seconds as f32
-        // );
         (self.stats.uptime_counter.value as f32 / total_seconds as f32)
             * self.stats.uptime_counter.weight
     }

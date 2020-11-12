@@ -12,6 +12,14 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use warp::Filter;
 
+/*
+ * Server Backend
+ * Offers HTTP entdpoints to download, lookup and upload a file.
+ * The ping endpoint can be used to test if the node is visible to others outside the own network.
+ * 
+ * receiver: channel which shuts the server down.
+ */
+
 #[derive(Serialize)]
 struct JsonResponse {
     status: String,
@@ -79,15 +87,17 @@ pub async fn start_server(
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct DownloadResponse {
-    pub hash: String,
-    pub content: Vec<u8>,
-    pub content_type: String,
-    pub file_name: String,
+    pub hash: String,           // hash of the filke
+    pub content: Vec<u8>,       // file content
+    pub content_type: String,   // file type
+    pub file_name: String,      // file name
 }
 
 async fn download(hash: String, state: Arc<AppState>) -> Result<impl warp::Reply, warp::Rejection> {
+    // Check if file with hash is stored on this node
     match state.file_store.read().unwrap().get_file(&hash) {
         Some(file_entry) => {
+            // Send file as response
             let response = warp::http::Response::builder()
                 .header("Content-Type", &file_entry.content_type)
                 .header(

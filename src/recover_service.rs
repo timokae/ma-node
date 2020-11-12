@@ -6,7 +6,14 @@ use crate::app_state::AppState;
 use crate::config_store::ConfigStoreFunc;
 use crate::file_store::{FileStoreFunc, RecoverEntry};
 use crate::http_requests::{download_from_node, lookup_hash_on_monitor, LookupMonitorResponse};
-// use crate::service::Service;
+
+/*
+ * RecoverService
+ * Looks for hashes in the AppState which needs to be downloaded from other nodes. 
+ * If such a hash is found, send a lookup request and download the node.
+ * 
+ * timeout: The amount of time the service should wait if no hash is found in the queue.
+ */
 
 pub struct RecoverService {
     pub app_state: Arc<AppState>,
@@ -28,6 +35,7 @@ impl RecoverService {
             let stop_services = self.app_state.stop_services.clone();
 
             loop {
+                // Look for a hash in the AppState
                 let recover_opt = self
                     .app_state
                     .file_store
@@ -35,12 +43,15 @@ impl RecoverService {
                     .unwrap()
                     .next_file_to_recover();
 
+                // If a hash is found, look it up and download it
                 if let Some(entry) = recover_opt {
                     info!("Trying to recover {}", entry.hash);
 
+                    // The if there is still space left on the disk
                     let has_no_capacity =
                         self.app_state.file_store.read().unwrap().capacity_left() <= 0;
 
+                    // If no space exists anymore, reject the hash
                     if has_no_capacity {
                         self.app_state
                             .file_store
@@ -50,8 +61,10 @@ impl RecoverService {
 
                         info!("Rejected hash {}", &entry.hash)
                     } else {
+                        // Send a lookup request
                         match lookup_hash_on_monitor(&entry.hash, &monitor.addr).await {
                             Ok(result) => {
+                                // Download the file from the node
                                 RecoverService::handle_lookup_success(
                                     self.app_state.clone(),
                                     &entry.hash,
@@ -98,6 +111,7 @@ impl RecoverService {
     ) {
         let node_addr = lookup_response.node_addr;
 
+        // Insert the downloaded file into the AppState
         match download_from_node(&node_addr, hash).await {
             Ok(result) => {
                 app_state.add_new_file(
@@ -114,6 +128,7 @@ impl RecoverService {
         }
     }
 
+    // If the file could not be downloaded, reinsert the hash in the queue
     async fn handle_lookup_fail(app_state: Arc<AppState>, hash: &str, error: reqwest::Error) {
         let entries = vec![RecoverEntry {
             hash: String::from(hash),

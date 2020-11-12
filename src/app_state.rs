@@ -5,6 +5,14 @@ use crate::config::ConfigFromFile;
 use crate::config_store::{ConfigStore, ConfigStoreFunc, Monitor};
 use crate::file_store::{FileStore, FileStoreFunc};
 use crate::stat_store::{StatStore, StatStoreFunc, Stats};
+
+/*  AppState
+ *  Acts as the single source of truth. All stores are accessible over the AppState.
+ *  It get passend to all places where its needed as a reference. It also offers funtions for actions
+ *  where access to multiple stores is needed. Besides the stores it also contains flags to
+ *  control the application flow.
+ */
+
 #[derive(Serialize)]
 pub struct Ping {
     pub fingerprint: String,
@@ -57,7 +65,6 @@ impl AppState {
 
     pub fn generate_ping(&self) -> Ping {
         let config = self.config_store.read().unwrap();
-
         let capacity_left = self.file_store.read().unwrap().capacity_left();
 
         let ping = Ping {
@@ -92,11 +99,13 @@ impl AppState {
             .unwrap()
             .save_file(&hash, content, content_type, file_name);
 
+        // Update uploaded_hashes
         self.file_store
             .write()
             .unwrap()
             .add_hash_to_uploaded_hashes(&hash);
 
+        // If needed, enqueue hash to distribution
         if distribute {
             self.file_store
                 .write()
@@ -104,11 +113,13 @@ impl AppState {
                 .insert_file_to_distribute(&hash);
         }
 
+        // Force ping service to send a new ping to monitor
         self.force_ping.swap(true, Ordering::Relaxed);
 
         return hash;
     }
 
+    // Write file_store and stat_store to disk
     pub fn serialize_state(&self) {
         self.file_store.read().unwrap().serialize_state();
         self.stat_store.read().unwrap().serialize_state();

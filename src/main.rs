@@ -16,7 +16,6 @@ mod http_requests;
 mod ping_service;
 mod recover_service;
 mod server;
-mod service;
 mod stat_store;
 
 use app_state::AppState;
@@ -37,12 +36,13 @@ async fn main() -> std::io::Result<()> {
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     setup_logger();
 
+    // Set stop_services flag to true when terminating with ctrl+c
     let stop_services: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
     setup_close_handler(stop_services.clone(), shutdown_tx);
 
     let force_ping = Arc::new(AtomicBool::new(true));
 
-    // Read config from file
+    // Read config and stats from file
     let args: Vec<String> = env::args().collect();
     let state_path: &String = &args[1].parse::<String>().unwrap();
     let config_from_file = config::parse_config(state_path);
@@ -96,6 +96,7 @@ async fn main() -> std::io::Result<()> {
     let fingerprint = app_state.config_store.read().unwrap().fingerprint();
     let _ = http_requests::notify_monitor_about_shutdown(&fingerprint, &monitor_addr).await;
 
+    // Serialize state one last time when stopping program
     app_state.serialize_state();
 
     Ok(())

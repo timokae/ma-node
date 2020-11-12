@@ -38,40 +38,43 @@ impl FileEntry {
 }
 
 pub struct FileStore {
-    path: String,
-    files_to_sync: Vec<RecoverEntry>,
-    files_to_distribute: Vec<String>,
-    files: HashMap<String, FileEntry>,
-    capacity: u64,
-    hashes_to_reject: Vec<String>,
-    new_hashes: Vec<String>,
+    path: String,                       // Path where the files are located
+    files_to_sync: Vec<RecoverEntry>,   // List of hashes to download from other nodes
+    files_to_distribute: Vec<String>,   // List of hashes to distribute to monitors
+    files: HashMap<String, FileEntry>,  // All files that are stored on this node
+    capacity: u64,                      // Total space on hdd
+    hashes_to_reject: Vec<String>,      // List of hashes that could not be processed
+    new_hashes: Vec<String>,            // List of hashes of downloaded files since last ping
 }
 
 pub trait FileStoreFunc {
     fn new(capacity: u64, path: &str) -> FileStore;
-    fn get_file(&self, hash: &str) -> Option<&FileEntry>;
-    fn save_file(&mut self, hash: &str, content: &[u8], content_type: &str, file_name: &str);
-    fn remove_file(&mut self, hash: &str);
-    fn insert_files_to_recover(&mut self, entries: Vec<RecoverEntry>);
-    fn next_file_to_recover(&mut self) -> Option<RecoverEntry>;
-    fn insert_file_to_distribute(&mut self, hash: &str);
-    fn next_file_to_distribute(&mut self) -> Option<String>;
-    fn hashes(&self) -> Vec<String>;
-    fn capacity_left(&self) -> u64;
-    fn reject_hash(&mut self, hash: &str);
-    fn rejected_hashes(&self) -> Vec<String>;
-    fn clear_rejected_hashes(&mut self);
-    fn serialize_state(&self);
-    fn deserialize_state(path: &str) -> HashMap<String, FileEntry>;
-    fn uploaded_hashes(&self) -> Vec<String>;
-    fn add_hash_to_uploaded_hashes(&mut self, hash: &str);
-    fn clear_uploaded_hashes(&mut self);
+    fn get_file(&self, hash: &str) -> Option<&FileEntry>;               // Returns FileEntry for given hash
+    fn save_file(&mut self, hash: &str, content: &[u8], content_type: &str, file_name: &str); // saves file in FileStore. Includes creation of new file and FileEntry
+    fn remove_file(&mut self, hash: &str);                              // Removes file from FileStore and disk
+    fn insert_files_to_recover(&mut self, entries: Vec<RecoverEntry>);  // Inserts file to list of files to recover
+    fn next_file_to_recover(&mut self) -> Option<RecoverEntry>;         // Returns next hash to recover, if it exists
+    fn insert_file_to_distribute(&mut self, hash: &str);                // Inserts hash in list of files to distribute
+    fn next_file_to_distribute(&mut self) -> Option<String>;            // Returns next hash to distribute, if it exists
+    fn hashes(&self) -> Vec<String>;                                    // Returns list of all hashes stored in FileStore
+    fn capacity_left(&self) -> u64;                                     // Returns available free space on disk
+    fn reject_hash(&mut self, hash: &str);                              // Adds given hash to list of hashes to reject
+    fn rejected_hashes(&self) -> Vec<String>;                           // Returns all rejected hashes
+    fn clear_rejected_hashes(&mut self);                                // Clears list of all rejected hashes
+    fn serialize_state(&self);                                          // saves current FileStore to disk as a JSON object
+    fn deserialize_state(path: &str) -> HashMap<String, FileEntry>;     // Reads FileState from a file
+    fn uploaded_hashes(&self) -> Vec<String>;                           // Returns list of all new hashes since last ping
+    fn add_hash_to_uploaded_hashes(&mut self, hash: &str);              // Adds hash to new hashes
+    fn clear_uploaded_hashes(&mut self);                                // Clears list of new hashes
 }
 
 impl FileStoreFunc for FileStore {
     fn new(capacity: u64, path: &str) -> FileStore {
+        // Read state from filke
         let file_state_path = format!("{}/file_state.json", path);
         let files = FileStore::deserialize_state(&file_state_path);
+        
+        // Output all saved files
         let tmp = files
             .values()
             .map(|fe| format!("{}: {}", &fe.hash, &fe.file_name))
@@ -102,7 +105,8 @@ impl FileStoreFunc for FileStore {
 
     fn remove_file(&mut self, hash: &str) {
         debug!("[FileStore.remove_file] {}", hash);
-
+        // Check if file is found on disk and delete it
+        // Then remove FileEntry from store
         if let Some(file_entry) = self.files.get(hash) {
             match std::fs::remove_file(&file_entry.path) {
                 Ok(_) => {
